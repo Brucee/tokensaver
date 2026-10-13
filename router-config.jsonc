@@ -1,0 +1,91 @@
+{
+  // Bundled defaults. User entries in ~/.tokensaver/router-config.jsonc
+  // override by id/path (providers/presets) or label (bindings).
+  //
+  // Backends v1: "anthropic" transport = verbatim passthrough of the Messages
+  // API; "openai" transport = translate to OpenAI chat-completions or
+  // responses (apiStyle) and translate the reply back. Providers needing
+  // special auth (ChatGPT OAuth, AWS Sig4) are not implemented yet.
+
+  // Routing preset Claude Code dials by default.
+  "claudecode": {
+    "preset": "/claudecode"
+  },
+  "providers": [
+    {
+      // Local models via llama.cpp's OpenAI-compatible server — free.
+      "id": "llamacpp",
+      "baseUrl": "http://localhost:8080/v1/",
+      "apiKey": "empty",
+      "transports": {
+        "openai": {}
+      }
+    },
+    {
+      "id": "openai",
+      "baseUrl": "https://api.openai.com/v1/",
+      "apiKey": "${OPENAI_API_KEY}",
+      // Map Claude tier slugs to OpenAI models for subagent dispatch.
+      "modelMappings": [
+        { "model": "*haiku*", "target": "gpt-5.4-mini" },
+        { "model": "*sonnet*", "target": "gpt-5.4" },
+        { "model": "*opus*", "target": "gpt-5.5" }
+      ],
+      "claudecode": {
+        "expose": true
+      },
+      "transports": {
+        "openai": {
+          "modelConfig": {
+            "apiStyle": "responses"
+          }
+        }
+      }
+    },
+    {
+      // Native Anthropic API. Targeted by /anthropic and /claudecode presets,
+      // both of which forward inbound auth headers verbatim.
+      "id": "anthropic",
+      "baseUrl": "https://api.anthropic.com",
+      "transports": {
+        "anthropic": {}
+      }
+    }
+  ],
+  // Routing presets addressable as /router-preset<path>/v1/....
+  "routingPresets": [
+    {
+      // Generic Anthropic passthrough for non-Claude-Code clients.
+      "path": "/anthropic",
+      "defaultProvider": "anthropic",
+      "passThroughAuth": true
+    },
+    {
+      // Claude Code home base. Forwards inbound auth to api.anthropic.com.
+      "path": "/claudecode",
+      "defaultProvider": "anthropic",
+      "passThroughAuth": true,
+      "modelMappings": [
+        { "model": "opus", "target": "claude-opus-5-5" },
+        { "model": "sonnet", "target": "claude-sonnet-5-5" },
+        { "model": "haiku", "target": "claude-haiku-5-5" }
+      ]
+    },
+    {
+      // Claude Code -> OpenAI API (needs OPENAI_API_KEY).
+      "path": "/claudecode-openai",
+      "defaultProvider": "openai"
+    },
+    {
+      // Generic OpenAI passthrough for tools speaking the OpenAI wire.
+      "path": "/openai",
+      "defaultProvider": "openai",
+      "passThroughAuth": true
+    },
+    {
+      // Claude Code -> local llama.cpp server.
+      "path": "/claudecode-local",
+      "defaultProvider": "llamacpp"
+    }
+  ]
+}

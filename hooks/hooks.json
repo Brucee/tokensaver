@@ -1,0 +1,95 @@
+{
+  "description": "tokenSaver session hooks",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node --no-warnings=ExperimentalWarning \"${CLAUDE_PLUGIN_ROOT}/scripts/session-hook.cjs\""
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node --no-warnings=ExperimentalWarning \"${CLAUDE_PLUGIN_ROOT}/scripts/session-hook.cjs\""
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node --no-warnings=ExperimentalWarning \"${CLAUDE_PLUGIN_ROOT}/scripts/session-hook.cjs\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node --no-warnings=ExperimentalWarning \"${CLAUDE_PLUGIN_ROOT}/scripts/session-hook.cjs\""
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node --no-warnings=ExperimentalWarning \"${CLAUDE_PLUGIN_ROOT}/scripts/session-hook.cjs\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node --no-warnings=ExperimentalWarning \"${CLAUDE_PLUGIN_ROOT}/scripts/session-hook.cjs\""
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node --no-warnings=ExperimentalWarning \"${CLAUDE_PLUGIN_ROOT}/scripts/session-hook.cjs\""
+          }
+        ]
+      }
+    ],
+    "StopFailure": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node --no-warnings=ExperimentalWarning \"${CLAUDE_PLUGIN_ROOT}/scripts/session-hook.cjs\""
+          }
+        ]
+      }
+    ],
+    "PostCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node --no-warnings=ExperimentalWarning \"${CLAUDE_PLUGIN_ROOT}/scripts/session-hook.cjs\""
+          }
+        ]
+      }
+    ]
+  }
+}

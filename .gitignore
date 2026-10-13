@@ -1,0 +1,9 @@
+node_modules/
+*.log
+.tokensaver-test/
+dist/
+.claude/
+CHANGELOG.md
+REPORT-REVISIONE.md
+PORTING-CODEX.md
+.codex-hook-dump.jsonl

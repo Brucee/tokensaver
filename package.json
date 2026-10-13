@@ -1,0 +1,26 @@
+{
+  "name": "tokensaver",
+  "version": "1.0.6",
+  "description": "tokenSaver — smart search, batch editing, SQL introspection and cost-optimized subagent delegation for Claude Code",
+  "type": "module",
+  "scripts": {
+    "test": "node scripts/run-tests.mjs"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.16.0"
+  },
+  "bin": {
+    "tokensaver": "scripts/tokensaver.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.20.0",
+    "better-sqlite3": "^12.0.0",
+    "ignore": "^7.0.12",
+    "mysql2": "^3.11.0",
+    "pg": "^8.13.0",
+    "picomatch": "^4.0.2",
+    "web-tree-sitter": "0.25.10",
+    "zod": "^3.24.0"
+  }
+}
