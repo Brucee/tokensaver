@@ -8,7 +8,7 @@ import { join } from "node:path";
 export const name = "claude";
 
 export function homeDir() {
-  return join(homedir(), ".claude", "tokensaver");
+  return join(process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), ".claude"), "tokensaver");
 }
 
 // Pre-1.0.5 state lived here; migrated by config.tokensaverHome().

@@ -10,7 +10,7 @@ import { ensureRouterIfActive } from "../cli/router.mjs";
 import { appendFileSync } from "node:fs";
 import { markPendingCompaction, buildPostCompactionDigest } from "../lib/compaction-digest.mjs";
 import { updateAvailableTip } from "../lib/update-check.mjs";
-import { getHost } from "../host/index.mjs";
+import { getHost, bindHost } from "../host/index.mjs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
@@ -330,7 +330,7 @@ if (process.env.TOKENSAVER_HOOK_DUMP) {
 }
 // Re-resolve with the envelope — Codex-only fields (turn_id, rollout path)
 // catch cases the env markers miss.
-HOST = getHost(process.env, rawInput);
+HOST = bindHost(process.env, rawInput);
 const input = HOST.normalizeHookInput(rawInput);
 if (loadSettings().enabled === false) process.exit(0);
 if (input && typeof input === "object") {

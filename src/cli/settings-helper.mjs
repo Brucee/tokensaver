@@ -15,7 +15,7 @@ const PLUGIN_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..")
 
 const BOOL_KEYS = new Set([
   "enabled", "statusLine", "statusLineSession", "statusLineLifetime", "statusLineTips",
-  "spinnerVerbs", "defaultAgent", "postCompactionDigest", "autoSessionTitle", "syntaxValidation",
+  "spinnerVerbs", "defaultAgent", "postCompactionDigest", "autoSessionTitle", "syntaxValidation", "updateCheck",
 ]);
 const INTERNAL_KEYS = new Set(["version"]);
 

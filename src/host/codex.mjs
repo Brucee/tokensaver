@@ -7,12 +7,12 @@
 // "compacted".replacement_history; spawn_agent fan-out verified live
 // (collaboration namespace, model pinning works, children see our MCP tools).
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
 export const name = "codex";
 
 export function homeDir() {
-  return join(homedir(), ".codex", "tokensaver");
+  return join(process.env.CODEX_HOME ?? join(homedir(), ".codex"), "tokensaver");
 }
 
 export function legacyHome() {
@@ -22,7 +22,7 @@ export function legacyHome() {
 // Codex has no shared JSON settings surface for plugins — host-scoped
 // settings (e.g. the Sql policy) get our own file under the plugin home.
 export function hostSettingsFile() {
-  return join(homeDir(), "host-settings.json");
+  return join(process.env.TOKENSAVER_HOME ? resolve(process.env.TOKENSAVER_HOME) : homeDir(), "host-settings.json");
 }
 
 // Codex already emits the canonical (Claude-shaped) envelope — identity,

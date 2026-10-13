@@ -9,6 +9,7 @@ import os from "node:os";
 import readline from "node:readline";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { detectHost as detectPluginHost } from "../host/index.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -843,10 +844,11 @@ function sessionIdEnv(host) {
 }
 
 function detectHost() {
+  if (process.env.TOKENSAVER_HOST === "claude" || process.env.TOKENSAVER_HOST === "codex") return process.env.TOKENSAVER_HOST;
   if (process.env.CLAUDECODE || process.env.CLAUDE_CODE_SESSION_ID) return "claude";
   if (process.env.CODEX_THREAD_ID) return "codex";
   if (process.env.COPILOT_AGENT_SESSION_ID) return "copilot";
-  return "claude";
+  return detectPluginHost();
 }
 
 // ---------------------------------------------------------------------------

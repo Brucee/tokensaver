@@ -10,7 +10,7 @@ import { runSql } from "../src/tools/sql.mjs";
 
 const server = new McpServer({
   name: "tokensaver-code",
-  version: process.env.TOKENSAVER_BUNDLE_VERSION ?? "1.0.5",
+  version: process.env.TOKENSAVER_BUNDLE_VERSION ?? "1.0.7",
 });
 
 const notImplemented = (name) => async () => ({

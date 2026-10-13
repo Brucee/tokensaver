@@ -59,7 +59,7 @@ test("codex scan: usage, tools, exec-wrapped MCP calls, model, duration", () => 
     );
     const { scan, byteOffset } = scanCodexTranscriptDelta(file, 0, undefined);
     assert.equal(scan.usage.turnCount, 2);
-    assert.equal(scan.usage.inputTokens, 2200);
+    assert.equal(scan.usage.inputTokens, 1650);
     assert.equal(scan.usage.outputTokens, 150);
     assert.equal(scan.usage.cacheReadTokens, 500);
     assert.equal(scan.usage.cacheCreationTokens, 50);
@@ -203,7 +203,7 @@ test("updateSessionFromTranscript dispatches to the codex scanner by host", () =
     appendFileSync(file, rec(4, "response_item", { type: "custom_tool_call_output", call_id: "s1", output: [] }));
     const state = updateSessionFromTranscript("codexsess1", file, "codex");
     assert.equal(state.usage.turnCount, 1);
-    assert.equal(state.usage.inputTokens, 1000);
+    assert.equal(state.usage.inputTokens, 750);
     assert.equal(state.totalSaverCalls, 1, "cross-delta pairing credits the call");
     assert.equal(state.model, "gpt-6-luna");
     const saved = loadSessionState("codexsess1");
@@ -296,17 +296,17 @@ test("codex: agent_id routes the agent rollout into state.subagents", () => {
     updateSessionFromTranscript("multia", agentFile, "codex", "agent-1");
     const state = loadSessionState("multia");
     // Parent slice only saw the main file.
-    assert.equal(state.parent.usage.inputTokens, 1000);
+    assert.equal(state.parent.usage.inputTokens, 750);
     // Agent slice has its own usage + its own model.
-    assert.equal(state.subagents["agent-1"].usage.inputTokens, 2000);
+    assert.equal(state.subagents["agent-1"].usage.inputTokens, 1750);
     assert.equal(state.subagents["agent-1"].model, "gpt-6-luna");
     // Rollup merges: totals include both files.
-    assert.equal(state.usage.inputTokens, 3000);
+    assert.equal(state.usage.inputTokens, 2500);
     assert.equal(state.totalSaverCalls, 1); // agent's Search call counted
     // Parent scan continues incrementally (offset not clobbered by agent file).
     appendFileSync(file, rec(2, "token_usage_record", { usage: { ...USAGE, input_tokens: 500 } }));
     updateSessionFromTranscript("multia", file, "codex");
-    assert.equal(loadSessionState("multia").parent.usage.inputTokens, 1500);
+    assert.equal(loadSessionState("multia").parent.usage.inputTokens, 1000);
   } finally {
     if (prevHome === undefined) delete process.env.TOKENSAVER_HOME;
     else process.env.TOKENSAVER_HOME = prevHome;
@@ -344,7 +344,7 @@ test("subagent slice: prototype-polluting agent ids cannot corrupt state", () =>
     }
     const state = loadSessionState("proto");
     assert.equal(typeof state.subagents["toString"], "object");
-    assert.equal(state.subagents["__proto__"].usage.inputTokens, 1000);
+    assert.equal(state.subagents["__proto__"].usage.inputTokens, 750);
     assert.equal(Object.getPrototypeOf(state.subagents), null);
   } finally {
     if (prevHome === undefined) delete process.env.TOKENSAVER_HOME;
@@ -371,9 +371,9 @@ test("concurrent saves union-merge subagent slices (parallel agent hooks)", () =
     delete stale.subagents["agent-1"];
     saveSessionState("race", stale); // must union-merge, not clobber
     const merged = loadSessionState("race");
-    assert.equal(merged.subagents["agent-1"].usage.inputTokens, 500);
+    assert.equal(merged.subagents["agent-1"].usage.inputTokens, 250);
     updateSessionFromTranscript("race", mainFile, "codex");
-    assert.equal(loadSessionState("race").parent.usage.inputTokens, 1000);
+    assert.equal(loadSessionState("race").parent.usage.inputTokens, 750);
   } finally {
     if (prevHome === undefined) delete process.env.TOKENSAVER_HOME;
     else process.env.TOKENSAVER_HOME = prevHome;

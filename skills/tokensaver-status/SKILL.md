@@ -5,6 +5,8 @@ description: "Check tokenSaver's health — version, data dir, settings, lifetim
 
 # tokenSaver status & doctor
 
+For CLI examples, resolve the installed plugin root from the skill location if `CLAUDE_PLUGIN_ROOT` is unset. Select the current host explicitly: `claude` for Claude Code, `codex` for Codex. In Bash use `TOKENSAVER_HOST=codex node "$CLAUDE_PLUGIN_ROOT/scripts/tokensaver.mjs" <command>` (substitute `claude` on Claude Code). In PowerShell use `$env:TOKENSAVER_HOST = "codex"` (or `"claude"`), then `node "$env:CLAUDE_PLUGIN_ROOT/scripts/tokensaver.mjs" <command>`. A quoted absolute script path works in either shell. Do not use Bash variable expansion in PowerShell. Use this invocation for every command below; the command arguments stay the same.
+
 ```bash
 node "$CLAUDE_PLUGIN_ROOT/scripts/tokensaver.mjs" status   # version, data dir, settings, lifetime totals (JSON)
 node "$CLAUDE_PLUGIN_ROOT/scripts/tokensaver.mjs" doctor   # self-check: node version, files, registration (JSON, exit 1 on failure)

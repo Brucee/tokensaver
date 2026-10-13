@@ -9,6 +9,8 @@ A fully local code-review pipeline: diff metadata → proportional lens selectio
 
 ## Step 1 — metadata only (keep your context light)
 
+For CLI examples, resolve the installed plugin root from the skill location if `CLAUDE_PLUGIN_ROOT` is unset. Select the current host explicitly: `claude` for Claude Code, `codex` for Codex. In Bash use `TOKENSAVER_HOST=codex node "$CLAUDE_PLUGIN_ROOT/scripts/tokensaver.mjs" <command>` (substitute `claude` on Claude Code). In PowerShell use `$env:TOKENSAVER_HOST = "codex"` (or `"claude"`), then `node "$env:CLAUDE_PLUGIN_ROOT/scripts/tokensaver.mjs" <command>`. A quoted absolute script path works in either shell. Do not use Bash variable expansion in PowerShell. Use this invocation for every command below; the command arguments stay the same.
+
 ```bash
 node "$CLAUDE_PLUGIN_ROOT/scripts/tokensaver.mjs" review-diff --meta            # auto-detects base
 node "$CLAUDE_PLUGIN_ROOT/scripts/tokensaver.mjs" review-diff --meta --base dev # explicit base
@@ -16,9 +18,9 @@ node "$CLAUDE_PLUGIN_ROOT/scripts/tokensaver.mjs" review-diff --meta --base dev 
 
 You get JSON: `ok`, `baseName`, `files.byCategory`, `suggestedLenses`. Do NOT run plain `review-diff` yourself — the reviewers fetch their own copy; the 60k bundle never enters your context.
 
-- `ok: false` or `files.all` empty → say so and stop.
-- `suggestedLenses` empty (docs/styles/assets only) → report "no code changes to review" and stop.
-- `ok: false` with `cannot spawn git` (seen on Codex's Windows sandbox, where node cannot spawn child processes inside exec) → compute the base yourself with exec git commands (`git merge-base HEAD <base>`; default `<base>` = `origin/HEAD` else `main` else `master`), then continue — the reviewers will fetch the diff the same way.
+- Handle `ok: false` with `cannot spawn git` first: use raw Git via the host shell to find the merge-base, changed files and changed-line count (default base: `origin/HEAD`, else `main`, else `master`). Include committed, staged, unstaged and untracked changes. Select lenses using the rules below, then continue with the raw-Git reviewer fallback.
+- Other `ok: false` results, or no changed files → report the reason and stop.
+- An empty lens selection (docs/styles/assets only) → report "no code changes to review" and stop.
 
 ## Step 2 — fan out one reviewer per suggested lens, in parallel
 
@@ -29,11 +31,12 @@ Lens: <lens name> — <lens text below>
 Fetch the diff bundle with: node "<absolute plugin root>/scripts/tokensaver.mjs" review-diff --base <baseName from step 1>
 ```
 
-**On Codex:** there is no `Task` tool — use `spawn_agent` (collaboration namespace) instead, one call per lens **in the same turn**, then `wait_agent` until every reviewer reports. Each call:
+**On Codex:** use the available collaboration tools. Inspect their schema and concurrency limit first. Launch one `spawn_agent` per lens within the available slots; wait for that batch, then reuse completed agents with `followup_task` for remaining lenses when slots cannot be released. Collect every lens result before synthesis. If collaboration tools are unavailable, run the selected lenses sequentially on the main agent and disclose that fallback. Example for a runtime supporting these fields:
 
 ```
 spawn_agent({
-  task_name: "review-<lens>",
+  task_name: "review_cross_file_consistency", // convert lens hyphens to underscores
+  fork_turns: "none",          // required by runtimes that restrict model overrides with history forks
   model: "gpt-6-luna",          // cheap tier — omit if your catalog rejects it (the error lists valid models)
   reasoning_effort: "high",     // lenses need real reasoning; subagents inherit the session effort otherwise (usually medium)
   message: "You are a single-lens code reviewer in a parallel review pipeline. First read <absolute plugin root>/agents/review.md — it defines your protocol and output format. Your ONLY lens: <lens name> — <lens text below>. Fetch the diff bundle with: node \"<absolute plugin root>/scripts/tokensaver.mjs\" review-diff --base <baseName from step 1> — if it errors with 'cannot spawn git' (Codex's Windows sandbox blocks node child processes), run the raw git commands yourself via exec instead: `git merge-base HEAD <baseName>` to get the merge-base, `git diff <mergeBase>...HEAD -- .` for committed changes, `git diff` for unstaged, `git diff --cached` for staged, `git status --porcelain` for untracked files (read those directly)."
@@ -88,8 +91,7 @@ N findings across M files.
 
 ## Gotchas
 
-- Run the reviewers in ONE message — sequential Task calls turn a ~30s review into several minutes. On Codex that means all `spawn_agent` calls in one turn, then a single `wait_agent` loop.
-- On Codex the runtime caps concurrent threads per session (default 4 including the root agent) — extra reviewers are queued and batched automatically; `features.multi_agent_v2.max_concurrent_threads_per_session = 8` in `~/.codex/config.toml` runs all 7 at once.
+- On Claude Code launch the available reviewer Tasks together. On Codex respect the runtime limit, including the parent agent; do not assume excess calls are queued. Batch or reuse reviewers as described above. Use only configuration keys supported by the installed host.
 - On Codex, `spawn_agent` rejects unknown `model` slugs with an error that lists the valid catalog — retry with the cheapest tier listed, or omit `model` entirely (the subagent then inherits your model).
 - On Codex's Windows sandbox, node cannot spawn child processes inside exec (`EPERM` on any `execFile`/`spawn`) — so `tokensaver.mjs review-diff` fails even though `git` itself works from the shell. The fallback is baked into the prompts above: reviewers run the same `git` commands via exec directly. `review-verify` is pure filesystem and works normally.
 - NEVER inline the diff bundle in Task prompts or read it yourself: self-fetch keeps your context free for synthesis. The bundle command is all reviewers need.

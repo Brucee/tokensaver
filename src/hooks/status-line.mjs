@@ -24,7 +24,7 @@ const TIPS = [
   "Sql connects to live databases — query real data while you code",
 ];
 
-const WEIGHTS = { savings: 6, reviewer: 2, baseline: 1, tip: 1, lifetime: 1 };
+const WEIGHTS = { savings: 6, reviewer: 2, baseline: 1, tip: 1, lifetime: 3 };
 
 function sessionSegment(stats) {
   return (

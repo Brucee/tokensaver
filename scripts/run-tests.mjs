@@ -10,11 +10,14 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const tempParent = resolve(tmpdir());
 const sandbox = mkdtempSync(join(tempParent, "tokensaver-functional-"));
 const env = { ...process.env };
-for (const key of Object.keys(env)) if (key.startsWith("TOKENSAVER_")) delete env[key];
-for (const dir of ["tmp", "home", "claude"]) mkdirSync(join(sandbox, dir));
+for (const key of Object.keys(env)) {
+  if (/^(TOKENSAVER_|CODEX_|CLAUDE_)/.test(key) || key === "CLAUDECODE") delete env[key];
+}
+for (const dir of ["tmp", "home", "claude", "codex"]) mkdirSync(join(sandbox, dir));
 Object.assign(env, {
   TEMP: join(sandbox, "tmp"), TMP: join(sandbox, "tmp"), TMPDIR: join(sandbox, "tmp"),
   TOKENSAVER_HOME: join(sandbox, "home"), CLAUDE_CONFIG_DIR: join(sandbox, "claude"),
+  CODEX_HOME: join(sandbox, "codex"), TOKENSAVER_HOST: "claude",
   GIT_CEILING_DIRECTORIES: sandbox, GIT_CONFIG_GLOBAL: join(sandbox, "gitconfig"), GIT_CONFIG_NOSYSTEM: "1",
 });
 const files = readdirSync(join(root, "test")).filter((f) => f.endsWith(".test.mjs")).sort();

@@ -77,6 +77,7 @@ test("PreToolUse: Task general-purpose → untouched", () => {
 // ---- codex envelopes (verified live on codex 0.162.1) ----
 
 test("PreToolUse (codex): apply_patch → Edit nudge", () => {
+  const previousHost = process.env.TOKENSAVER_HOST;
   process.env.TOKENSAVER_HOST = "codex";
   try {
     const out = runHook({
@@ -87,13 +88,15 @@ test("PreToolUse (codex): apply_patch → Edit nudge", () => {
     });
     assert.match(out.hookSpecificOutput.additionalContext, /mcp__code__Edit/);
   } finally {
-    delete process.env.TOKENSAVER_HOST;
+    if (previousHost === undefined) delete process.env.TOKENSAVER_HOST;
+    else process.env.TOKENSAVER_HOST = previousHost;
   }
 });
 
 test("PreToolUse (codex): PowerShell read reported as Bash → Search nudge", { skip: process.platform !== "win32" }, () => {
   // On Windows codex reports its exec shell as tool_name "Bash" even though
   // the command is PowerShell — the PS pattern set must still match.
+  const previousHost = process.env.TOKENSAVER_HOST;
   process.env.TOKENSAVER_HOST = "codex";
   try {
     const out = runHook({
@@ -104,7 +107,8 @@ test("PreToolUse (codex): PowerShell read reported as Bash → Search nudge", { 
     });
     assert.match(out.hookSpecificOutput.additionalContext, /mcp__code__Search/);
   } finally {
-    delete process.env.TOKENSAVER_HOST;
+    if (previousHost === undefined) delete process.env.TOKENSAVER_HOST;
+    else process.env.TOKENSAVER_HOST = previousHost;
   }
 });
 

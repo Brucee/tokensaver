@@ -168,7 +168,8 @@ async function cmdDoctor() {
   ok("agents", ["code", "explore", "recall"].every((a) => existsSync(join(PLUGIN_ROOT, "agents", a + ".md"))));
 
   const { loadSettings } = await import("../src/lib/config.mjs");
-  if (loadSettings().statusLine) {
+  const { getHost } = await import("../src/host/index.mjs");
+  if (getHost().capabilities.statusLine && loadSettings().statusLine) {
     let registered = false;
     try {
       const claudeDir = process.env.CLAUDE_CONFIG_DIR ?? join(process.env.HOME ?? process.env.USERPROFILE ?? "", ".claude");

@@ -4,14 +4,14 @@
     "name": "tokenSaver"
   },
   "metadata": {
-    "description": "tokenSaver plugins for Claude Code"
+    "description": "tokenSaver plugins for Claude Code and Codex"
   },
   "plugins": [
     {
       "name": "tokensaver",
       "source": "./",
       "description": "tokenSaver enhanced coding tools — smart search, batch editing, SQL introspection, and cost-optimized subagent delegation",
-      "version": "1.0.6",
+      "version": "1.0.7",
       "author": {
         "name": "tokenSaver"
       }

@@ -18,7 +18,7 @@ export const HOST_NAMES = Object.keys(HOSTS);
 // signals. TOKENSAVER_HOST forces a choice (tests, debug, exotic setups).
 export function detectHost(env = process.env, hookInput) {
   const forced = env.TOKENSAVER_HOST;
-  if (forced && HOSTS[forced]) return forced;
+  if (forced && Object.hasOwn(HOSTS, forced)) return forced;
   if (env.CODEX_HOME || env.CODEX_CLI || env.CODEX_CI) return "codex";
   if (/[\\/]\.codex[\\/]/i.test(env.CLAUDE_PLUGIN_ROOT ?? "")) return "codex";
   if (hookInput && typeof hookInput === "object") {
@@ -30,7 +30,17 @@ export function detectHost(env = process.env, hookInput) {
 }
 
 let cached;
+let boundHost;
+
+// A hook resolves its host once from the complete envelope. Downstream
+// modules must keep that selection even when environment markers are absent.
+export function bindHost(env = process.env, hookInput) {
+  boundHost = HOSTS[detectHost(env, hookInput)];
+  return boundHost;
+}
+
 export function getHost(env = process.env, hookInput) {
+  if (boundHost && env === process.env && hookInput === undefined) return boundHost;
   const name = detectHost(env, hookInput);
   if (cached?.name === name) return cached;
   cached = HOSTS[name] ?? HOSTS.claude;
@@ -40,4 +50,5 @@ export function getHost(env = process.env, hookInput) {
 // Test helper — clear the memoized adapter.
 export function _resetHost() {
   cached = undefined;
+  boundHost = undefined;
 }

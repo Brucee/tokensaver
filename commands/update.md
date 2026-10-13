@@ -11,10 +11,17 @@ Update the tokenSaver plugin — pick the block matching the host you are runnin
 claude plugin marketplace update tokensaver-marketplace && claude plugin update tokensaver@tokensaver-marketplace -y
 ```
 
-**On Codex CLI** run:
+**On Codex CLI with Bash** run:
 
 ```bash
 codex plugin marketplace upgrade tokensaver-marketplace && codex plugin add tokensaver@tokensaver-marketplace
+```
+
+**On Codex CLI with PowerShell** run (also compatible with Windows PowerShell 5.1):
+
+```powershell
+codex plugin marketplace upgrade tokensaver-marketplace
+if ($LASTEXITCODE -eq 0) { codex plugin add tokensaver@tokensaver-marketplace }
 ```
 
 If it reports a newer version was installed, tell the user the update applies on the next session restart (and that on Codex the plugin hooks must be trusted again in `/hooks` if `hooks.json` changed). If it reports "already up to date" or the same version, say so plainly.

@@ -1,7 +1,7 @@
 {
   "name": "tokensaver",
-  "version": "1.0.6",
-  "description": "tokenSaver — smart search, batch editing, SQL introspection and cost-optimized subagent delegation for Claude Code",
+  "version": "1.0.7",
+  "description": "tokenSaver — smart search, batch editing, SQL introspection and cost-optimized subagent delegation for Claude Code and Codex",
   "type": "module",
   "scripts": {
     "test": "node scripts/run-tests.mjs"

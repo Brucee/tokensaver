@@ -5,6 +5,8 @@ description: "What the tokenSaver plugin does, its tools, commands and configura
 
 # tokenSaver
 
+For CLI examples, resolve the installed plugin root from the skill location if `CLAUDE_PLUGIN_ROOT` is unset. Select the current host explicitly: `claude` for Claude Code, `codex` for Codex. In Bash use `TOKENSAVER_HOST=codex node "$CLAUDE_PLUGIN_ROOT/scripts/tokensaver.mjs" <command>` (substitute `claude` on Claude Code). In PowerShell use `$env:TOKENSAVER_HOST = "codex"` (or `"claude"`), then `node "$env:CLAUDE_PLUGIN_ROOT/scripts/tokensaver.mjs" <command>`. A quoted absolute script path works in either shell. Do not use Bash variable expansion in PowerShell. Use this invocation for every command below; the command arguments stay the same.
+
 tokenSaver is a Claude Code and Codex plugin that compresses tool round-trips (Search, Edit, Sql), tracks the tool calls it saves, and shows the savings in the status line (Claude only). It is fully local — no account, no telemetry, no subscription.
 
 ## Tools (MCP server `code`)
@@ -36,4 +38,6 @@ tokensaver doctor            # verify the install
 ## Gotchas
 
 - The Sql `sql` policy lives in the host settings file under `tokensaver.sql` (`~/.claude/settings.json` on Claude, `~/.codex/tokensaver/host-settings.json` on Codex); clear it with `tokensaver settings --set sql none`.
-- `alwaysLoadTools` and `statusLine` take effect on the next session.
+- MCP tool preloading is controlled by `.mcp.json`; `alwaysLoadTools` is not a runtime setting.
+- `statusLine` registration is Claude-only; it is inert on Codex.
+- `CODEX_HOME` relocates the Codex configuration root. `TOKENSAVER_HOME` overrides plugin state and the Codex SQL-policy file.

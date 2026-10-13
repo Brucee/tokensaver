@@ -5,6 +5,8 @@ description: "How tokenSaver measures savings — the equivalent-calls model, pr
 
 # tokenSaver savings
 
+For CLI examples, resolve the installed plugin root from the skill location if `CLAUDE_PLUGIN_ROOT` is unset. Select the current host explicitly: `claude` for Claude Code, `codex` for Codex. In Bash use `TOKENSAVER_HOST=codex node "$CLAUDE_PLUGIN_ROOT/scripts/tokensaver.mjs" <command>` (substitute `claude` on Claude Code). In PowerShell use `$env:TOKENSAVER_HOST = "codex"` (or `"claude"`), then `node "$env:CLAUDE_PLUGIN_ROOT/scripts/tokensaver.mjs" <command>`. A quoted absolute script path works in either shell. Do not use Bash variable expansion in PowerShell. Use this invocation for every command below; the command arguments stay the same.
+
 tokenSaver estimates what its MCP calls would have cost as native tool calls.
 
 ## The model
@@ -33,4 +35,5 @@ tokensaver savings --session <id>     # one session
 ## Gotchas
 
 - Savings only accrue while the transcript file keeps growing; resumed sessions deduplicate via `requestId` so nothing is double-counted.
-- A failed tool result does not count as a saved call.
+- A failed tool result does not count as a saved call. If a Codex `exec` wrapper contains several calls and any result reports an error, credit for that wrapper is withheld because individual successes cannot be reliably attributed.
+- Codex input tokens include cache reads/writes; those are separated before applying prices. Existing recorded estimates retain their original calculation; new deltas use the corrected accounting.

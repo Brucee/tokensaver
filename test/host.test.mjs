@@ -65,8 +65,9 @@ test("codex adapter: tolerates camelCase event name", () => {
 });
 
 test("homeDir: per-host, distinct paths", () => {
-  assert.match(claude.homeDir(), /\.claude[\\/]tokensaver$/);
-  assert.match(codex.homeDir(), /\.codex[\\/]tokensaver$/);
+  assert.ok(claude.homeDir().endsWith("tokensaver"));
+  assert.ok(codex.homeDir().endsWith("tokensaver"));
+  assert.notEqual(claude.homeDir(), codex.homeDir());
   assert.equal(claude.legacyHome() != null, true);
   assert.equal(codex.legacyHome(), null);
 });

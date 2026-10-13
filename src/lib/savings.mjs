@@ -97,7 +97,7 @@ function boundedContains(haystack, needle) {
 export function pricingFor(model) {
   if (model == null) return FALLBACK_PRICING;
   const lower = model.toLowerCase();
-  if (PRICING[lower] != null) return PRICING[lower];
+  if (Object.hasOwn(PRICING, lower)) return PRICING[lower];
   for (const key of PRICING_KEYS) {
     if (boundedContains(lower, key)) return PRICING[key];
   }
@@ -108,7 +108,7 @@ export function resolveModelKey(model) {
   const lower = model.toLowerCase();
   const slash = lower.lastIndexOf("/");
   const tail = slash < 0 ? lower : lower.slice(slash + 1);
-  if (PRICING[tail] != null) return tail;
+  if (Object.hasOwn(PRICING, tail)) return tail;
   for (const key of PRICING_KEYS) {
     if (boundedContains(tail, key)) return key;
   }
@@ -356,7 +356,7 @@ const OVERLOAD_TYPE = "overloaded_error";
 function emptyScan() {
   return {
     usage: emptyUsage(),
-    usageByModel: {},
+    usageByModel: Object.create(null),
     saverCalls: 0,
     equivalentNativeToolCalls: 0,
     model: undefined,
@@ -620,6 +620,23 @@ function codexSaverCalls(payload) {
   return out;
 }
 
+// Exec output can contain several serialized MCP results. If any fails,
+// withhold credit for the wrapper: the rollout has no reliable per-call
+// success mapping. Direct MCP output is handled by the same parser.
+function codexOutputFailed(output, depth = 0) {
+  if (depth > 12) return true;
+  if (typeof output === "string") {
+    try { return codexOutputFailed(JSON.parse(output), depth + 1); } catch {}
+    return /["'](?:isError|is_error)["']\s*:\s*true/.test(output);
+  }
+  if (Array.isArray(output)) return output.some((item) => codexOutputFailed(item, depth + 1));
+  if (output && typeof output === "object") {
+    if (output.isError === true || output.is_error === true || CODEX_FAILED_STATUS.has(output.status)) return true;
+    return Object.values(output).some((value) => codexOutputFailed(value, depth + 1));
+  }
+  return false;
+}
+
 export function scanCodexTranscriptDelta(path, fromOffset, highWater, pendingSaver = new Map(), priorModel) {
   const scan = emptyScan();
   const size = statSync(path).size;
@@ -663,7 +680,9 @@ export function scanCodexTranscriptDelta(path, fromOffset, highWater, pendingSav
       bucket.turnCount++;
       const turnUsage = {
         turnCount: 0,
-        inputTokens: u.input_tokens ?? 0,
+        // Codex input includes cached and cache-written tokens; Claude's
+        // canonical input bucket contains only ordinary input.
+        inputTokens: Math.max(0, (u.input_tokens ?? 0) - (u.cached_input_tokens ?? 0) - (u.cache_write_input_tokens ?? 0)),
         outputTokens: u.output_tokens ?? 0,
         cacheReadTokens: u.cached_input_tokens ?? 0,
         cacheCreationTokens: u.cache_write_input_tokens ?? 0,
@@ -714,7 +733,7 @@ export function scanCodexTranscriptDelta(path, fromOffset, highWater, pendingSav
     if (CODEX_OUTPUT_TYPES.has(payload.type)) {
       const callId = payload.call_id;
       if (callId == null) continue;
-      const failed = CODEX_FAILED_STATUS.has(payload.status);
+      const failed = CODEX_FAILED_STATUS.has(payload.status) || codexOutputFailed(payload.output);
       for (const k of [...pendingSaver.keys()]) {
         if (k !== callId && !k.startsWith(callId + "#")) continue;
         const equiv = pendingSaver.get(k);
@@ -798,6 +817,7 @@ export function saveSessionState(sessionId, state) {
       editsApplied: max(disk.codeEditLines.editsApplied, state.codeEditLines?.editsApplied),
     },
   };
+  rollup(state);
   writeJsonAtomic(sessionStatePath(sessionId), state);
 }
 
@@ -889,7 +909,7 @@ export function lifetimeStats() {
     if (!SESSION_FILE_RE.test(name)) continue;
     try {
       const raw = JSON.parse(readFileSync(join(dir, name), "utf8"));
-      const s = raw?.accumulatedSavings ?? {};
+      const s = normalizeState(raw).accumulatedSavings;
       addSavingsInto(totals, s);
       if ((s.callsSaved ?? 0) > 0 || (s.costSavedInUsd ?? 0) > 0) totals.sessionCount++;
       const mtime = statSync(join(dir, name)).mtime.toISOString();

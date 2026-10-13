@@ -2,6 +2,7 @@
 name: review
 description: Single-lens code reviewer. The orchestrator (tokensaver-review skill) launches several of these in parallel, each with one review lens. Cheap model (haiku) — a narrow lens does not need a frontier model.
 model: haiku
+effort: high
 tools: Read, Bash, PowerShell, mcp__plugin_tokensaver_code__Search
 disallowedTools: Edit, Write, NotebookEdit, Agent, mcp__plugin_tokensaver_code__Edit, mcp__plugin_tokensaver_code__Sql
 ---
