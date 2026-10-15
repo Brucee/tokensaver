@@ -1,6 +1,6 @@
-// Session hook dispatcher — handles SessionStart, UserPromptSubmit,
-// PreToolUse and StopFailure from a single process, selected by
-// hook_event_name in the stdin JSON envelope. Never throws; exits 0.
+// Session hook dispatcher — handles every registered hook event (see
+// hooks/hooks.json) from a single process, selected by hook_event_name in
+// the stdin JSON envelope. Never throws; exits 0.
 import { readHookInput, writeHookOutput } from "../lib/hookio.mjs";
 import { loadSettings, loadProjectFlags } from "../lib/config.mjs";
 import { updateSessionFromTranscript, loadSessionState, saveSessionState, sessionStatsSummary } from "../lib/savings.mjs";
@@ -69,11 +69,13 @@ const ALLOWED_SUFFIX = "was allowed to run, but you MUST use the correct tool fo
 const EDIT_NUDGE_WINDOW_MS = 30_000;
 const EDIT_NUDGE_THRESHOLD = 2;
 
-function editStatePath() {
-  return join(tmpdir(), "tokensaver-edit-state.json");
+// Per session: parallel sessions must not count each other's edits.
+function editStatePath(sessionId) {
+  const id = String(sessionId ?? "default").replace(/[^\w-]/g, "_");
+  return join(tmpdir(), `tokensaver-edit-state-${id}.json`);
 }
 
-function editBatchingNudge(toolInput) {
+function editBatchingNudge(toolInput, sessionId) {
   const edits = toolInput?.edits;
   if (!Array.isArray(edits) || edits.length !== 1) return undefined;
   const file = edits[0]?.file_path;
@@ -81,13 +83,13 @@ function editBatchingNudge(toolInput) {
   const now = Date.now();
   let state = { edits: [] };
   try {
-    const parsed = JSON.parse(readFileSync(editStatePath(), "utf8"));
+    const parsed = JSON.parse(readFileSync(editStatePath(sessionId), "utf8"));
     if (Array.isArray(parsed?.edits)) state = parsed;
   } catch {}
   state.edits = state.edits.filter((e) => now - e.time < EDIT_NUDGE_WINDOW_MS);
   state.edits.push({ time: now, file });
   try {
-    writeFileSync(editStatePath(), JSON.stringify(state));
+    writeFileSync(editStatePath(sessionId), JSON.stringify(state));
   } catch {}
   if (state.edits.length < EDIT_NUDGE_THRESHOLD) return undefined;
   return (
@@ -174,7 +176,7 @@ function handlePreToolUse(input) {
   // Our own MCP tools get the session cwd injected when the model omits it.
   const tools = ownTools();
   if (tools.re.test(toolName)) {
-    const nudge = toolName === tools.edit ? editBatchingNudge(toolInput) : undefined;
+    const nudge = toolName === tools.edit ? editBatchingNudge(toolInput, input.session_id) : undefined;
     if (typeof input.cwd === "string" && input.cwd && !(typeof toolInput.cwd === "string" && toolInput.cwd)) {
       return {
         hookSpecificOutput: {

@@ -44,7 +44,16 @@ export function stripJsonc(text) {
     // literals (e.g. "a,]") untouched, which a post-pass regex cannot.
     if (ch === ",") {
       let k = i + 1;
-      while (k < n && /\s/.test(text[k])) k++;
+      // Look past whitespace and comments: `1, // note\n]` is still trailing.
+      for (;;) {
+        while (k < n && /\s/.test(text[k])) k++;
+        if (text[k] === "/" && text[k + 1] === "/") {
+          while (k < n && text[k] !== "\n") k++;
+        } else if (text[k] === "/" && text[k + 1] === "*") {
+          const end = text.indexOf("*/", k + 2);
+          k = end < 0 ? n : end + 2;
+        } else break;
+      }
       if (text[k] === "}" || text[k] === "]") { i++; continue; }
     }
     out += ch;

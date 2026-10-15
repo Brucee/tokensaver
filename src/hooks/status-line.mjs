@@ -17,14 +17,14 @@ const EMOJI = "💾";
 const BRAND = `${EMOJI} ${BRAND_GREEN}TOKENSAVER${RESET}`;
 
 const TIPS = [
-  "Try /tokensaver-savings to see how much time, tokens, and money tokenSaver is saving you",
+  "Ask \"how much has tokenSaver saved me?\" for a breakdown of time, tokens and money saved",
   "Ask me to recall past sessions — \"how did we fix that bug last week?\"",
   "Use the Sql tool to explore and understand your database schema without reading SQL files",
-  "Run `tokensaver doctor` to check your tokenSaver setup",
+  "Ask \"is tokenSaver working?\" to run its doctor self-check",
   "Sql connects to live databases — query real data while you code",
 ];
 
-const WEIGHTS = { savings: 6, reviewer: 2, baseline: 1, tip: 1, lifetime: 3 };
+const WEIGHTS = { savings: 6, tip: 1, lifetime: 3 };
 
 function sessionSegment(stats) {
   return (
@@ -49,14 +49,12 @@ function tipSegment(turnCount) {
 }
 
 // Weighted rotation: expand each segment by its weight, index by turn count.
-function pickSegment(turnCount, segments) {
-  if (segments.length === 0) return "savings";
-  if (segments.length === 1) return segments[0];
+function rotation(segments) {
   const expanded = [];
   for (const seg of segments) {
     for (let i = 0; i < (WEIGHTS[seg] ?? 1); i++) expanded.push(seg);
   }
-  return expanded[turnCount % expanded.length];
+  return expanded;
 }
 
 const raw = await readStdinJson();
@@ -113,13 +111,21 @@ if (settings.statusLineLifetime) segments.push("lifetime");
 
 if (stats.totalSaverCalls > 0 && segments.length > 0) {
   const turnCount = state.usage.turnCount;
-  const picked = pickSegment(turnCount, segments);
-  if (picked === "tip") done(tipSegment(turnCount));
+  const expanded = rotation(segments);
+  const picked = expanded[turnCount % expanded.length];
+  // Advance the tip once per full rotation: indexing TIPS by turnCount would
+  // pin a single tip whenever the rotation length is a multiple of TIPS.length.
+  if (picked === "tip") done(tipSegment(Math.floor(turnCount / expanded.length)));
   if (picked === "lifetime") {
     const lt = lifetimeStats();
     if (lt.costSavedInUsd > 0) done(lifetimeSegment(lt));
   }
   // "savings" and unrenderable picks fall through to the session segment.
+}
+
+// Nothing saved yet in this session: a tip beats a row of zeros.
+if (stats.totalSaverCalls === 0 && settings.statusLineTips) {
+  done(tipSegment(state.usage.turnCount));
 }
 
 if (settings.statusLineSession) {

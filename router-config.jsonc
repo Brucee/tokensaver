@@ -1,5 +1,5 @@
 {
-  // Bundled defaults. User entries in ~/.tokensaver/router-config.jsonc
+  // Bundled defaults. User entries in ~/.claude/tokensaver/router-config.jsonc
   // override by id/path (providers/presets) or label (bindings).
   //
   // Backends v1: "anthropic" transport = verbatim passthrough of the Messages

@@ -10,17 +10,10 @@ import { runSql } from "../src/tools/sql.mjs";
 
 const server = new McpServer({
   name: "tokensaver-code",
-  version: process.env.TOKENSAVER_BUNDLE_VERSION ?? "1.0.7",
-});
-
-const notImplemented = (name) => async () => ({
-  isError: true,
-  content: [{ type: "text", text: `[tokenSaver] ${name}: not implemented yet` }],
+  version: process.env.TOKENSAVER_BUNDLE_VERSION ?? "1.0.8",
 });
 
 // --- Schemas (per MCP SDK zod shape) ---------------------------------------
-// Full behavioral spec lives in PLAN-TOKENSAVER.md / IMPLEMENTATION.md;
-// schemas are filled in Steps 2–4.
 
 server.registerTool(
   "Search",

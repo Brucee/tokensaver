@@ -3,7 +3,7 @@
 // No network, no auth, no telemetry.
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
-import { existsSync, readFileSync, statSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, readFileSync, statSync, writeFileSync, unlinkSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 
 const PLUGIN_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -51,7 +51,7 @@ async function cmdStatus() {
       callsSaved: life.callsSaved,
       tokensSaved: life.tokensSaved,
       costSavedInUsd: life.costSavedInUsd,
-      timeSavedInMs: life.callsSaved * 25000,
+      timeSavedInMs: life.timeSavedInMs,
     },
     settings,
   };
@@ -72,7 +72,7 @@ async function cmdSavings(argv) {
 
 async function cmdSettings(argv) {
   // delegate to settings-helper preserving its interface (--show / --set)
-  const m = await import("../src/cli/settings-helper.mjs?args=" + encodeURIComponent(JSON.stringify(argv)));
+  await import("../src/cli/settings-helper.mjs?args=" + encodeURIComponent(JSON.stringify(argv)));
 }
 
 async function cmdReviewDiff(argv) {
@@ -132,7 +132,7 @@ async function cmdRouter(argv) {
   }
   if (sub === "daemon") {
     // Foreground run for debugging — state file + port are written as usual.
-    const m = await import("../servers/router-daemon.mjs");
+    await import("../servers/router-daemon.mjs");
     return;
   }
   console.error('Usage: tokensaver router activate [preset] | deactivate | status | daemon');
@@ -153,6 +153,7 @@ async function cmdDoctor() {
     const probe = join(home, ".doctor-probe");
     writeFileSync(probe, "x");
     statSync(probe);
+    unlinkSync(probe);
     ok("data-dir-writable", true);
   } catch (e) {
     ok("data-dir-writable", false, e.message);
@@ -165,7 +166,7 @@ async function cmdDoctor() {
   ok("recall-cli", existsSync(join(PLUGIN_ROOT, "scripts", "recall.cjs")));
   ok("router-config", existsSync(join(PLUGIN_ROOT, "router-config.jsonc")));
   ok("router-daemon", existsSync(join(PLUGIN_ROOT, "servers", "router-daemon.mjs")));
-  ok("agents", ["code", "explore", "recall"].every((a) => existsSync(join(PLUGIN_ROOT, "agents", a + ".md"))));
+  ok("agents", ["code", "explore", "recall", "review"].every((a) => existsSync(join(PLUGIN_ROOT, "agents", a + ".md"))));
 
   const { loadSettings } = await import("../src/lib/config.mjs");
   const { getHost } = await import("../src/host/index.mjs");

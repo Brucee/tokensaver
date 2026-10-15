@@ -284,7 +284,7 @@ function renderFileTag(entry, cwd) {
 // Global content cap: first file over the remaining budget is truncated at
 // a line boundary, later files become metadata-only stubs, and if even the
 // wrapper doesn't fit the tail is dropped entirely.
-function enforceCap(entries, cwd, diagnostics) {
+function enforceCap(entries, cwd, diagnostics, stoppedAtBudget) {
   const contentBudget = Math.floor(envCap() * CONTENT_BUDGET_FRACTION);
   const wrapperBudget = Math.floor(envCap() * WRAPPER_BUDGET_FRACTION);
   let used = 0;
@@ -342,12 +342,15 @@ function enforceCap(entries, cwd, diagnostics) {
     if (truncated) parts.push(`truncated ${truncated} file(s)`);
     if (dropped) parts.push(`dropped ${dropped} trailing file(s)`);
     if (removed) parts.push(`omitted ${removed} more file(s) entirely`);
+    if (stoppedAtBudget) parts.push("remaining files not read");
     diagnostics.push(
-      `Output exceeded total-content cap of ${contentBudget.toLocaleString()} chars: ` +
-      `${parts.join(", ")} (${omittedUnits.toLocaleString()} chars of content omitted). ` +
+      `Output exceeded total-content cap of ${contentBudget.toLocaleString("en-US")} chars: ` +
+      `${parts.join(", ")} (${omittedUnits.toLocaleString("en-US")} chars of content omitted). ` +
       NARROW_CONTENT_HINT,
     );
+    return true;
   }
+  return false;
 }
 
 function cutAtLineBoundary(content, budget) {
@@ -451,6 +454,7 @@ export async function runSearch(args, { cwd: sessionCwd } = {}) {
   let renderedChars = 0;
   let countedEntries = 0;
   let matchedFiles = 0;
+  let stoppedAtBudget = false;
 
   for (const f of files) {
     while (countedEntries < entries.length) {
@@ -459,7 +463,7 @@ export async function runSearch(args, { cwd: sessionCwd } = {}) {
       if (!regex || counted.matchCount > 0) matchedFiles++;
     }
     if (isTextMode && renderedChars >= envCap() * CONTENT_BUDGET_FRACTION) {
-      diagnostics.push("Search stopped at the output budget; narrow the query to retrieve remaining files.");
+      stoppedAtBudget = true;
       break;
     }
     if (args.file_limit != null && matchedFiles >= args.file_limit) break;
@@ -602,6 +606,7 @@ export async function runSearch(args, { cwd: sessionCwd } = {}) {
 
   // Assemble envelope.
   const parts = [`<cwd path="${xmlEscape(cwd)}" />`];
+  let contentCapped = false;
   if (outputMode === "file_paths_only") {
     const paths = entries.filter((e) => !regex || e.matchCount > 0).map((e) => displayPath(cwd, e.absPath));
     if (regex) {
@@ -632,9 +637,11 @@ export async function runSearch(args, { cwd: sessionCwd } = {}) {
     if (shown.length === 0) parts.push("<file-list />");
     else parts.push("<file-list>\n" + shown.join("\n") + "\n</file-list>");
   } else {
-    enforceCap(entries, cwd, diagnostics);
+    contentCapped = enforceCap(entries, cwd, diagnostics, stoppedAtBudget);
     for (const e of entries) parts.push(renderFileTag(e, cwd));
   }
+  // One truncation notice: the cap message already covers unread files.
+  if (stoppedAtBudget && !contentCapped) diagnostics.push("Search stopped at the output budget; narrow the query to retrieve remaining files.");
   for (const nf of notFounds) {
     const hint = `**/${basename(nf.pattern)}`;
     parts.push(
@@ -647,7 +654,8 @@ export async function runSearch(args, { cwd: sessionCwd } = {}) {
     diagnostics.push(`line-range on wildcard pattern "${w}" ignored — ranges apply only to literal file paths; the whole matched files were searched.`);
   }
   parts.push(`<search_result if_modified_since="${fmtStamp(startedAt)}" />`);
-  parts.push(RESULT_LINE_HINT);
+  // The hint only matters when content was cut short; skip it otherwise.
+  if (contentCapped || stoppedAtBudget) parts.push(RESULT_LINE_HINT);
   for (const d of diagnostics) parts.push(d);
 
   const boundedParts = [];

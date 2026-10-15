@@ -1,10 +1,10 @@
 # tokenSaver
 
-Current release: **1.0.7**.
+Current release: **1.0.8**.
 
 A Claude Code **and Codex CLI** plugin that compresses tool round-trips — smart file search, batch editing with fuzzy matching, and SQL introspection in single MCP calls — and accounts for the calls it saves (status line on Claude Code, `tokensaver savings` on Codex).
 
-**Fully local.** No account, no login, no telemetry, no subscription. Everything the plugin does runs on your machine and works offline.
+**Fully local.** No account, no login, no telemetry, no subscription. Everything the plugin does runs on your machine. The only network access is the one-time dependency install and a daily update check against GitHub (disable it with the `updateCheck` setting).
 
 > Built as a clean-room reimplementation: every behavior is reproduced from a functional specification, the code is readable JavaScript, and there is no bundled or obfuscated code.
 
@@ -58,6 +58,8 @@ The review selects up to 7 lenses. On Codex it respects the concurrency limit re
 
 - `SessionStart` — primes session state; on Claude Code, registers the status line.
 - `UserPromptSubmit` — updates savings accounting; on Claude Code, derives the session title.
+- `PostToolUse`, `Stop`, `SubagentStop` — incremental savings accounting from the transcript (subagent usage merged per agent).
+- `PreCompact` / `PostCompact` — arm and inject the post-compaction digest (see below).
 - `PreToolUse` — injects `cwd` into plugin tool calls; suggests `Search`/`Edit`/`Sql` when a Bash command re-implements them (`cat`/`grep`/`find`/`ls`/`sed -i`/`psql`/`mysql`/`sqlite3`…); on Claude Code, redirects `Task(Explore)` to the Haiku agent. On Windows Codex, PowerShell file operations and `apply_patch` receive the corresponding MCP hints.
 - `StopFailure` — safe no-op logging.
 
@@ -220,6 +222,8 @@ tokensaver settings --set <key> <true|false>
 tokensaver recall '<query>'        # session-history search
 tokensaver doctor                  # verify the install
 ```
+
+A plugin install does not put `tokensaver` on your `PATH`: run `node "$CLAUDE_PLUGIN_ROOT/scripts/tokensaver.mjs" <command>` (or the quoted absolute path to the installed plugin), or `npm link` a checkout to get the short command.
 
 Select the CLI host explicitly: in Bash use `TOKENSAVER_HOST=codex tokensaver savings`; in PowerShell use `$env:TOKENSAVER_HOST = "codex"; tokensaver savings`. Use `claude` for Claude Code. `CODEX_HOME` relocates the Codex configuration root; `TOKENSAVER_HOME` overrides plugin state and the Codex SQL-policy file. Claude SQL policy remains in `CLAUDE_CONFIG_DIR/settings.json` (default `~/.claude/settings.json`).
 
