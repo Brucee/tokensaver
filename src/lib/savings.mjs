@@ -137,8 +137,11 @@ export function costOf(usage, model, forcedPricing) {
 // name on Claude, plain "code" on Codex. Both prefixes identify our tools in
 // transcripts; host-specific detection inside exec JS uses the codex prefix.
 const OWN_PREFIXES = ["mcp__plugin_tokensaver_code__", "mcp__code__"];
-const TIME_SAVED_PER_CALL_MS = 25000;
-const TOKEN_MULTIPLIER = 1.3;
+// Measured on Claude transcripts 2026-10-12..27 (grouped by message.id): a
+// native file-op roundtrip averages ~8.8s, and the model already packs 1.29
+// tool calls per turn, so N equivalent native calls cost N/1.29 roundtrips.
+const TIME_SAVED_PER_CALL_MS = 8800;
+const NATIVE_CALLS_PER_TURN = 1.29;
 
 function ownToolKind(name) {
   for (const prefix of OWN_PREFIXES) {
@@ -157,7 +160,7 @@ export function equivalentCallsFor(name, input) {
   if (kind === "Edit") {
     const edits = Array.isArray(input?.edits) ? input.edits : [];
     const files = new Set(edits.map((e) => e.file_path).filter(Boolean)).size;
-    return Math.max(edits.length, 1) + (files || 1) + 0.5;
+    return Math.max(edits.length, 1) + (files || 1);
   }
   if (kind === "Search") {
     let n = 2;
@@ -175,9 +178,9 @@ export function equivalentCallsFor(name, input) {
 export function savingsFor(calls, avgInput, avgCacheRead, avgCacheCreate, avgOutput, model) {
   const saved = Math.max(calls - 1, 0);
   const rate = pricingFor(model);
-  const inTok = Math.round(saved * avgInput * TOKEN_MULTIPLIER);
-  const crTok = Math.round(saved * avgCacheRead * TOKEN_MULTIPLIER);
-  const ccTok = Math.round(saved * avgCacheCreate * TOKEN_MULTIPLIER);
+  const inTok = Math.round(saved * avgInput);
+  const crTok = Math.round(saved * avgCacheRead);
+  const ccTok = Math.round(saved * avgCacheCreate);
   const outTok = Math.round(saved * avgOutput);
   return {
     callsSaved: saved,
@@ -227,6 +230,7 @@ function emptySlice() {
     // record has not been scanned yet (hooks fire between call and output).
     pendingSaverCalls: {},
     saverCalls: 0,
+    saverCallsByKind: {},
     equivalentNativeToolCalls: 0,
     savings: emptySavings(),
     dailySavings: {},
@@ -240,6 +244,7 @@ function emptySessionState() {
     usage: emptyUsage(),
     prevUsage: emptyUsage(),
     totalSaverCalls: 0,
+    saverCallsByKind: {},
     equivalentNativeToolCalls: 0,
     accumulatedSavings: emptySavings(),
     dailySavings: {},
@@ -250,7 +255,7 @@ function emptySessionState() {
 }
 
 function normalizeSlice(raw) {
-  return { ...emptySlice(), ...raw, usage: { ...emptyUsage(), ...raw?.usage }, savings: { ...emptySavings(), ...raw?.savings }, dailySavings: raw?.dailySavings ?? {} };
+  return { ...emptySlice(), ...raw, usage: { ...emptyUsage(), ...raw?.usage }, savings: { ...emptySavings(), ...raw?.savings }, dailySavings: raw?.dailySavings ?? {}, saverCallsByKind: { ...raw?.saverCallsByKind } };
 }
 
 function normalizeState(raw) {
@@ -273,6 +278,7 @@ function normalizeState(raw) {
     accumulatedSavings: emptySavings(),
     dailySavings: {},
     totalSaverCalls: 0,
+    saverCallsByKind: {},
     equivalentNativeToolCalls: 0,
   };
   rollup(state);
@@ -292,12 +298,14 @@ function rollup(state) {
   const savings = emptySavings();
   const daily = {};
   let saverCalls = 0;
+  const byKind = {};
   let equiv = 0;
   let model = state.parent.model;
   for (const slice of [state.parent, ...Object.values(state.subagents)]) {
     addUsageInto(usage, slice.usage);
     addSavingsInto(savings, slice.savings);
     saverCalls += slice.saverCalls;
+    addCountsInto(byKind, slice.saverCallsByKind);
     equiv += slice.equivalentNativeToolCalls;
     for (const [date, entry] of Object.entries(slice.dailySavings)) {
       const agg = (daily[date] ??= emptyDailyEntry());
@@ -311,8 +319,13 @@ function rollup(state) {
   state.accumulatedSavings = savings;
   state.dailySavings = daily;
   state.totalSaverCalls = saverCalls;
+  state.saverCallsByKind = byKind;
   state.equivalentNativeToolCalls = equiv;
   state.model = model;
+}
+
+function addCountsInto(dst, src) {
+  for (const [k, n] of Object.entries(src ?? {})) dst[k] = (dst[k] ?? 0) + n;
 }
 
 function todayKey() {
@@ -331,7 +344,7 @@ function addCostToDaily(slice, cost) {
 // Convert a batch of our MCP calls into savings at current per-turn averages.
 function recordCallSavings(slice, equivalentSum, callCount, model) {
   if (callCount === 0) return;
-  const calls = Math.max(equivalentSum - callCount, 0) + 1;
+  const calls = Math.max(equivalentSum / NATIVE_CALLS_PER_TURN - callCount, 0) + 1;
   const { turnCount } = slice.usage;
   if (turnCount <= 0) return;
   const result = savingsFor(
@@ -358,6 +371,7 @@ function emptyScan() {
     usage: emptyUsage(),
     usageByModel: Object.create(null),
     saverCalls: 0,
+    saverCallsByKind: {},
     equivalentNativeToolCalls: 0,
     model: undefined,
     lastStopReason: undefined,
@@ -457,13 +471,10 @@ export function scanTranscriptDelta(path, fromOffset, highWater, pendingSaver = 
       if (Array.isArray(content)) {
         for (const block of content) {
           if (block.type !== "tool_result") continue;
-          const equiv = pendingSaver.get(block.tool_use_id);
-          if (equiv != null) {
+          const pending = pendingSaver.get(block.tool_use_id);
+          if (pending != null) {
             pendingSaver.delete(block.tool_use_id);
-            if (block.is_error !== true) {
-              scan.saverCalls++;
-              scan.equivalentNativeToolCalls += equiv;
-            }
+            if (block.is_error !== true) creditSaverCall(scan, pending);
           }
         }
       }
@@ -491,7 +502,7 @@ export function scanTranscriptDelta(path, fromOffset, highWater, pendingSaver = 
           bucket.toolUseCount++;
           if (block.name === "Task" || block.name === "Agent") scan.spawnedSubagent = true;
           const equiv = equivalentCallsFor(block.name, block.input);
-          if (equiv > 0) pendingSaver.set(block.id, equiv);
+          if (equiv > 0) pendingSaver.set(block.id, { equiv, kind: ownToolKind(block.name) });
           if (ownToolKind(block.name) === "Edit" && Array.isArray(block.input?.edits)) {
             for (const e of block.input.edits) {
               scan.codeEditLines.linesAdded += lc(e?.new_string);
@@ -529,6 +540,7 @@ export function scanTranscriptDelta(path, fromOffset, highWater, pendingSaver = 
     const turnUsage = usageFromMessage(usage);
     addUsageInto(scan.usage, turnUsage);
     addUsageInto(bucket, turnUsage);
+    scan.lastContextTokens = turnUsage.inputTokens + turnUsage.cacheReadTokens + turnUsage.cacheCreationTokens;
     if (typeof message.model === "string") {
       const cost = costOf({ ...turnUsage, turnCount: 1 }, message.model);
       scan.usage.costInUsd += cost;
@@ -717,7 +729,7 @@ export function scanCodexTranscriptDelta(path, fromOffset, highWater, pendingSav
       const savers = codexSaverCalls(payload);
       savers.forEach((s, i) => {
         const equiv = equivalentCallsFor(s.name, s.input);
-        if (equiv > 0) pendingSaver.set(`${key}#${i}`, equiv);
+        if (equiv > 0) pendingSaver.set(`${key}#${i}`, { equiv, kind: ownToolKind(s.name) });
       });
       for (const s of savers) {
         if (ownToolKind(s.name) === "Edit" && Array.isArray(s.input?.edits)) {
@@ -736,16 +748,22 @@ export function scanCodexTranscriptDelta(path, fromOffset, highWater, pendingSav
       const failed = CODEX_FAILED_STATUS.has(payload.status) || codexOutputFailed(payload.output);
       for (const k of [...pendingSaver.keys()]) {
         if (k !== callId && !k.startsWith(callId + "#")) continue;
-        const equiv = pendingSaver.get(k);
+        const pending = pendingSaver.get(k);
         pendingSaver.delete(k);
-        if (!failed) {
-          scan.saverCalls++;
-          scan.equivalentNativeToolCalls += equiv;
-        }
+        if (!failed) creditSaverCall(scan, pending);
       }
     }
   }
   return { scan, byteOffset };
+}
+
+// Pending entries persisted before per-kind tracking are bare weights.
+function creditSaverCall(scan, pending) {
+  const equiv = typeof pending === "number" ? pending : pending.equiv;
+  const kind = typeof pending === "number" ? "other" : pending.kind;
+  scan.saverCalls++;
+  scan.saverCallsByKind[kind] = (scan.saverCallsByKind[kind] ?? 0) + 1;
+  scan.equivalentNativeToolCalls += equiv;
 }
 
 // ---------- session update ----------
@@ -756,9 +774,11 @@ function mergeScanIntoSlice(slice, scanResult) {
   if (scan.model != null) slice.model = scan.model;
   if (scan.lastStopReason != null) slice.lastStopReason = scan.lastStopReason;
   if (scan.maxSeenRequestId != null) slice.maxSeenRequestId = scan.maxSeenRequestId;
+  if (scan.lastContextTokens != null) slice.lastContextTokens = scan.lastContextTokens;
 
   if (scan.saverCalls > 0) {
     slice.saverCalls += scan.saverCalls;
+    addCountsInto(slice.saverCallsByKind, scan.saverCallsByKind);
     slice.equivalentNativeToolCalls += scan.equivalentNativeToolCalls;
     slice.pendingEquivalentSum += scan.equivalentNativeToolCalls;
     slice.pendingCallCount += scan.saverCalls;
@@ -884,6 +904,7 @@ export function sessionStatsSummary(state) {
     ...s,
     timeSavedInMs: s.callsSaved * TIME_SAVED_PER_CALL_MS,
     totalSaverCalls: state.totalSaverCalls ?? 0,
+    saverCallsByKind: state.saverCallsByKind ?? {},
     equivalentNativeToolCalls: state.equivalentNativeToolCalls ?? 0,
     codeEditLines: state.codeEditLines,
     compactions: {
@@ -916,5 +937,8 @@ export function lifetimeStats() {
       if (totals.lastUpdatedAt == null || mtime > totals.lastUpdatedAt) totals.lastUpdatedAt = mtime;
     } catch {}
   }
+  // Same as sessionStatsSummary: time follows the current per-call constant,
+  // so sessions recorded under an older one are not overstated.
+  totals.timeSavedInMs = totals.callsSaved * TIME_SAVED_PER_CALL_MS;
   return totals;
 }

@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync, existsSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -46,17 +46,57 @@ function renderStatus(env, home, sid, state) {
 test("status line rotates through every tip with default segments", () => {
   const { home, env } = statusLineEnv();
   const tips = new Set();
-  // Default weights 6/1/3 → rotation length 10, the tip slot is index 6.
-  for (let turn = 6; turn < 6 + 10 * 5; turn += 10) {
+  // Default segments rotate savings → lifetime → tip every 20s; slot 3k+2 is the tip.
+  for (let k = 0; k < 5; k++) {
     // Session totals are rolled up from the slices on load.
-    const out = renderStatus(env, home, "tips", {
-      parent: { usage: { turnCount: turn }, saverCalls: 1, savings: { callsSaved: 1, timeSavedInMs: 25000, tokensSaved: 10, costSavedInUsd: 0.01 } },
+    const out = renderStatus({ ...env, TOKENSAVER_STATUS_NOW_MS: String((3 * k + 2) * 20_000) }, home, "tips", {
+      parent: { usage: { turnCount: 1 }, saverCalls: 1, savings: { callsSaved: 1, timeSavedInMs: 25000, tokensSaved: 10, costSavedInUsd: 0.01 } },
     });
     const m = /TIP: (.*?)\s*$/.exec(out);
     assert.ok(m, out);
     tips.add(m[1]);
   }
   assert.equal(tips.size, 5);
+  rmSync(home, { recursive: true, force: true });
+});
+
+test("status line rotates segments on a 20s clock", () => {
+  const { home, env } = statusLineEnv();
+  const state = { parent: { usage: { turnCount: 1 }, saverCalls: 1, savings: { callsSaved: 1, timeSavedInMs: 25000, tokensSaved: 10, costSavedInUsd: 0.01 } } };
+  const at = (ms) => renderStatus({ ...env, TOKENSAVER_STATUS_NOW_MS: String(ms) }, home, "clock", state);
+  assert.match(at(20_000 * 3), /session savings/);
+  assert.match(at(20_000 * 3 + 19_999), /session savings/);
+  assert.match(at(20_000 * 4), /lifetime savings/);
+  assert.match(at(20_000 * 5), /TIP:/);
+  rmSync(home, { recursive: true, force: true });
+});
+
+test("status line registration sets a 20s refreshInterval and upgrades old entries", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "ts-108r-"));
+  const saved = { c: process.env.CLAUDE_CONFIG_DIR, h: process.env.TOKENSAVER_HOME };
+  process.env.CLAUDE_CONFIG_DIR = dir;
+  process.env.TOKENSAVER_HOME = mkdtempSync(join(tmpdir(), "ts-108h-"));
+  try {
+    const { registerStatusLine, statusLineCommand } = await import("../src/lib/claude-settings.mjs");
+    writeFileSync(join(dir, "settings.json"), JSON.stringify({ statusLine: { type: "command", command: statusLineCommand(ROOT), padding: 0 } }));
+    registerStatusLine(ROOT);
+    const s = JSON.parse(readFileSync(join(dir, "settings.json"), "utf8"));
+    assert.equal(s.statusLine.refreshInterval, 20);
+  } finally {
+    process.env.CLAUDE_CONFIG_DIR = saved.c;
+    process.env.TOKENSAVER_HOME = saved.h;
+    if (saved.c === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+    if (saved.h === undefined) delete process.env.TOKENSAVER_HOME;
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("status line warns once the context passes 200K", () => {
+  const { home, env } = statusLineEnv();
+  const big = renderStatus(env, home, "ctxbig", { parent: { usage: { turnCount: 3 }, lastContextTokens: 240_000 } });
+  assert.match(big, /context 240K re-read every turn — compact at the next milestone/);
+  const small = renderStatus(env, home, "ctxsmall", { parent: { usage: { turnCount: 3 }, lastContextTokens: 150_000 } });
+  assert.doesNotMatch(small, /context/);
   rmSync(home, { recursive: true, force: true });
 });
 

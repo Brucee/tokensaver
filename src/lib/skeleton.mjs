@@ -1,7 +1,7 @@
 // AST skeleton view: keep every line except the interior of declaration
 // bodies — signatures, imports, comments and top-level code stay, bodies
-// collapse to a `⋮ N lines` marker. ~50-70% smaller on real modules and
-// enough for "what does this file expose" without a full read.
+// collapse to a `⋮ N lines` marker. Enough for "what does this file expose"
+// without a full read.
 //
 // Language-agnostic by design: grammars name body nodes differently
 // (block / class_body / statement_block / compound_statement / …) but the
@@ -17,27 +17,21 @@ const SKELETON_LANGUAGE = {
   ".cjs": "javascript",
 };
 
-// Only leaf bodies fold: a body containing other bodies is a container
-// (class with methods, impl block, nested functions) and must recurse so
-// the nested signatures stay visible. Field lists (struct fields, enum
-// variants) are NOT body types — they're the signature, not the body.
+// Field lists (struct fields, enum variants) are NOT body types — they're
+// the signature, not the body.
 const BODY_TYPES = new Set([
   "block", "class_body", "statement_block", "compound_statement",
   "declaration_list", "initializer_list", "literal_value", "object",
 ]);
 
-const MIN_ELIDED_LINES = 2; // a marker shorter than the body isn't a saving
+// Bodies owned by these nodes hold declarations (methods, nested types) and
+// recurse so their signatures stay visible. Every other body — function,
+// method, callback, top-level if/for, object literal — folds whole, even
+// when it nests further blocks: folding only leaf bodies kept React
+// components and script-style modules at ~85% of their size.
+const CONTAINER_PARENT_RE = /class|interface|impl_item|trait|namespace|module|mod_item/;
 
-function isLeafBody(node) {
-  const stack = [];
-  for (let i = 0; i < node.childCount; i++) stack.push(node.child(i));
-  while (stack.length) {
-    const n = stack.pop();
-    if (BODY_TYPES.has(n.type)) return false;
-    for (let i = 0; i < n.childCount; i++) stack.push(n.child(i));
-  }
-  return true;
-}
+const MIN_ELIDED_LINES = 2; // a marker shorter than the body isn't a saving
 
 // A body node drops either all its lines (it starts on a fresh line —
 // python `block` after `def f():`) or its interior (it shares its first
@@ -49,7 +43,7 @@ function bodyRanges(root, lines) {
   const visit = (node) => {
     for (let i = 0; i < node.childCount; i++) {
       const child = node.child(i);
-      if (!BODY_TYPES.has(child.type) || !isLeafBody(child)) {
+      if (!BODY_TYPES.has(child.type) || CONTAINER_PARENT_RE.test(node.type)) {
         visit(child);
         continue;
       }
@@ -74,11 +68,16 @@ function bodyRanges(root, lines) {
   return merged;
 }
 
+const extOf = (absPath) => absPath.slice(absPath.lastIndexOf(".")).toLowerCase();
+
+export function canSkeletonize(absPath) {
+  return SKELETON_LANGUAGE[extOf(absPath)] != null;
+}
+
 // Returns the skeleton text, or null when the extension has no grammar or
 // parsing fails — callers fall back to the heuristic summarizer.
 export async function skeletonize(absPath, content) {
-  const ext = absPath.slice(absPath.lastIndexOf(".")).toLowerCase();
-  const grammar = SKELETON_LANGUAGE[ext];
+  const grammar = SKELETON_LANGUAGE[extOf(absPath)];
   if (grammar == null) return null;
   try {
     const parser = await getParser();

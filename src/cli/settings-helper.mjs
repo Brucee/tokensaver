@@ -14,7 +14,7 @@ import { join } from "node:path";
 const PLUGIN_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 const BOOL_KEYS = new Set([
-  "enabled", "statusLine", "statusLineSession", "statusLineLifetime", "statusLineTips",
+  "enabled", "statusLine", "statusLineSession", "statusLineLifetime", "statusLineTips", "statusLineContextWarning",
   "spinnerVerbs", "defaultAgent", "postCompactionDigest", "autoSessionTitle", "syntaxValidation", "updateCheck",
 ]);
 const INTERNAL_KEYS = new Set(["version"]);

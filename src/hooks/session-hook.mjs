@@ -8,7 +8,7 @@ import { deriveTitle, firstPromptInfo, hasExternalTitle } from "../lib/session-t
 import { registerStatusLine, unregisterStatusLine, registerDefaultAgent, unregisterDefaultAgent, registerSpinnerVerbs, unregisterSpinnerVerbs } from "../lib/claude-settings.mjs";
 import { ensureRouterIfActive } from "../cli/router.mjs";
 import { appendFileSync } from "node:fs";
-import { markPendingCompaction, buildPostCompactionDigest } from "../lib/compaction-digest.mjs";
+import { markPendingCompaction, buildPostCompactionDigest, sweepStaleCompactionMarkers } from "../lib/compaction-digest.mjs";
 import { updateAvailableTip } from "../lib/update-check.mjs";
 import { getHost, bindHost } from "../host/index.mjs";
 import { fileURLToPath } from "node:url";
@@ -304,7 +304,7 @@ async function handlePostCompact(input) {
   const s = sessionStatsSummary(state);
   const lines = [
     `tokenSaver session digest after compaction:`,
-    `- calls saved: ${s.callsSaved} (of ${s.equivalentNativeToolCalls} equivalent native calls)`,
+    `- calls saved: ${Math.round(s.callsSaved)} (of ${s.equivalentNativeToolCalls} equivalent native calls)`,
     `- tokens saved: ${s.tokensSaved}, cost saved: $${s.costSavedInUsd.toFixed(4)}`,
   ];
   if (s.codeEditLines) lines.push(`- edited lines: ${s.codeEditLines.linesAdded ?? 0}+ ${s.codeEditLines.linesRemoved ?? 0}-`);
@@ -351,6 +351,7 @@ if (input && typeof input === "object") {
         if (settings.defaultAgent) registerDefaultAgent();
         else unregisterDefaultAgent();
       }
+      if (HOST.capabilities.postCompactDigest) sweepStaleCompactionMarkers();
       // Sessions starting from a compaction may reach PostCompact without our
       // PreCompact marker — arm the digest from here too (upstream parity).
       if (HOST.capabilities.postCompactDigest && input.source === "compact" && input.session_id) {

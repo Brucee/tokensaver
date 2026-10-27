@@ -57,6 +57,14 @@ test("Search: #line-range slices read", async () => {
   assert.ok(!t.includes("1:nothing here"));
 });
 
+test("Search: summary without a grammar returns only the head", async () => {
+  writeFileSync(join(FIX, "long.html"), Array.from({ length: 200 }, (_, i) => `<p>row ${i + 1}</p>`).join("\n"));
+  const t = text(await runSearch({ file_glob_patterns: ["long.html"], summary: true }, { cwd: FIX }));
+  assert.ok(t.includes("60:<p>row 60</p>"));
+  assert.ok(!t.includes("row 61<"));
+  assert.match(t, /no outline for \.html: first 60 of 200 lines/);
+});
+
 test("Search: not-found emits hint tag", async () => {
   const r = await runSearch({ file_glob_patterns: ["missing.ts"] }, { cwd: FIX });
   assert.ok(text(r).includes("<not-found"));

@@ -12,11 +12,13 @@ tokenSaver estimates what its MCP calls would have cost as native tool calls.
 ## The model
 
 - Every successful `Search`, `Edit` or `Sql` call maps to "equivalent native calls":
-  - `Edit` → `max(edits,1) + max(files,1) + 0.5`
+  - `Edit` → `max(edits,1) + max(files,1)`
   - `Search` → `2 + extra globs + (regex?1:0) + (summary?1:0)`
   - `Sql` → `5` flat, anything else → `1`
-- `callsSaved = max(0, equivalent − actualCalls)`; `timeSaved = callsSaved × 25s`.
-- `tokensSaved = callsSaved × avgTokensPerTurn` (input/cache × 1.3, output × 1.0).
+- `callsSaved = max(0, equivalent / 1.29 − actualCalls)` — roundtrips avoided; 1.29 is the measured number of native tool calls the model already packs per turn, so the value can be fractional.
+- `timeSaved = callsSaved × 8.8s` (measured mean of a native file-op roundtrip). Session and lifetime time are recomputed from `callsSaved`, so older sessions follow the current constant.
+- `tokensSaved = callsSaved × avgTokensPerTurn` (no multiplier).
+- Session files also carry `saverCallsByKind` (`Search`/`Edit`/`Sql`/`other`); sessions scanned before the field existed have no breakdown.
 - `costSaved` uses the embedded per-model pricing (e.g. sonnet $3/$15, opus $5/$25, haiku $0.8/$4 per million).
 
 ## Files

@@ -71,6 +71,28 @@ export function clearPendingCompaction(sessionId) {
   } catch {}
 }
 
+// Markers of sessions that ended between PreCompact and PostCompact are
+// never consumed by their own session; SessionStart sweeps the expired ones.
+export function sweepStaleCompactionMarkers(now = Date.now()) {
+  let names;
+  try {
+    names = fs.readdirSync(markerDir());
+  } catch {
+    return;
+  }
+  for (const name of names) {
+    if (!name.endsWith(".json")) continue;
+    const file = path.join(markerDir(), name);
+    try {
+      const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
+      if (typeof parsed?.pendingSinceMs === "number" && now - parsed.pendingSinceMs <= MARKER_TTL_MS) continue;
+    } catch {}
+    try {
+      fs.unlinkSync(file);
+    } catch {}
+  }
+}
+
 function readPendingCompaction(sessionId) {
   try {
     const parsed = JSON.parse(fs.readFileSync(markerPath(sessionId), "utf8"));

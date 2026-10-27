@@ -1,6 +1,6 @@
 # tokenSaver
 
-Current release: **1.0.8**.
+Current release: **1.0.9**.
 
 A Claude Code **and Codex CLI** plugin that compresses tool round-trips — smart file search, batch editing with fuzzy matching, and SQL introspection in single MCP calls — and accounts for the calls it saves (status line on Claude Code, `tokensaver savings` on Codex).
 
@@ -174,7 +174,7 @@ The plugin doesn't compress prompts — it **reduces the number of round-trips a
 - DuckDB runs its CLI in [safe mode](https://duckdb.org/docs/current/clients/cli/safe_mode), with configuration locked, extension autoload/install disabled, no spill directory, a 256 MiB memory limit and 2 threads. Main-database SQL remains available; external file reads/writes, network access, external extension loading and `ATTACH` are blocked by the engine. Dot-commands are rejected. This is an engine restriction, not an OS sandbox.
 - DuckDB's main database must be inside `cwd` or `tokensaver.sql.duckdb.allowedDirectories` in the active host's SQL policy (`tokensaver.sql` in Claude settings or Codex `<plugin home>/host-settings.json`). These directories do **not** enable external file access. The old `fileWrites: true` option now fails explicitly; remove it or set it to `false`. DuckDB uses a fresh CLI process per request, so use a database file for state shared across calls. Processes are killed on timeout. Unsupported CLI security settings fail closed; the functional tests use DuckDB 1.5.6.
 
-**Honest accounting:** the status line's `callsSaved` is measured (each MCP call maps to the native calls it replaced). `tokensSaved`, `$` and time are *estimates* — calls saved × your session's average turn size, × a fixed per-call time. Treat them as a trend indicator, not an invoice.
+**Honest accounting:** the status line's `callsSaved` is derived from what was measured (each MCP call maps to the native calls it replaced, divided by the 1.29 calls per turn the model already batches natively). `tokensSaved`, `$` and time are *estimates* — calls saved × your session's average turn size, × a fixed per-call time. Treat them as a trend indicator, not an invoice.
 
 ## Local installation (Claude Code)
 

@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 
 process.env.TOKENSAVER_HOME = mkdtempSync(join(tmpdir(), "ts-digest-"));
 
-const { markPendingCompaction, clearPendingCompaction, buildPostCompactionDigest, rankDroppedTurns } = await import(
+const { markPendingCompaction, clearPendingCompaction, buildPostCompactionDigest, rankDroppedTurns, sweepStaleCompactionMarkers } = await import(
   "../src/lib/compaction-digest.mjs"
 );
 
@@ -137,4 +137,16 @@ test("no boundary in transcript → keeps marker for retry, returns nothing", as
   // marker preserved — boundary may not be flushed to disk yet
   const m = JSON.parse((await import("node:fs")).readFileSync(join(process.env.TOKENSAVER_HOME, "post-compaction-digest", "nob.json"), "utf8"));
   assert.equal(typeof m.pendingSinceMs, "number");
+});
+
+test("sweep removes only expired or unreadable markers", async () => {
+  const { existsSync } = await import("node:fs");
+  const mdir = join(process.env.TOKENSAVER_HOME, "post-compaction-digest");
+  markPendingCompaction("fresh");
+  writeFileSync(join(mdir, "old.json"), JSON.stringify({ pendingSinceMs: Date.now() - 901_000 }));
+  writeFileSync(join(mdir, "junk.json"), "not json");
+  sweepStaleCompactionMarkers();
+  assert.ok(existsSync(join(mdir, "fresh.json")));
+  assert.ok(!existsSync(join(mdir, "old.json")));
+  assert.ok(!existsSync(join(mdir, "junk.json")));
 });

@@ -168,6 +168,24 @@ async function cmdDoctor() {
   ok("router-daemon", existsSync(join(PLUGIN_ROOT, "servers", "router-daemon.mjs")));
   ok("agents", ["code", "explore", "recall", "review"].every((a) => existsSync(join(PLUGIN_ROOT, "agents", a + ".md"))));
 
+  // Runs the real Sql path (worker process + driver), not just an import.
+  try {
+    const { openSqliteProcess } = await import("../src/lib/sqlite-process.mjs");
+    const db = await openSqliteProcess(":memory:", 5000);
+    try { await db.query("SELECT 1"); } finally { await db.close(); }
+    ok("sqlite-driver", true);
+  } catch (e) {
+    ok("sqlite-driver", false, e.message);
+  }
+  for (const mod of ["mysql2", "pg"]) {
+    try {
+      await import(mod);
+      ok(`${mod}-driver`, true);
+    } catch (e) {
+      ok(`${mod}-driver`, false, e.message);
+    }
+  }
+
   const { loadSettings } = await import("../src/lib/config.mjs");
   const { getHost } = await import("../src/host/index.mjs");
   if (getHost().capabilities.statusLine && loadSettings().statusLine) {

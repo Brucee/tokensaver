@@ -15,7 +15,7 @@ import { globBase, globToRegex, isGlobPattern } from "../lib/glob.mjs";
 import { normalizePath, resolveSessionPath } from "../lib/paths.mjs";
 import { truncateLine } from "../lib/lineio.mjs";
 import { mcpText, mcpError } from "../lib/errors.mjs";
-import { skeletonize } from "../lib/skeleton.mjs";
+import { skeletonize, canSkeletonize } from "../lib/skeleton.mjs";
 import { Script } from "node:vm";
 import { loadSettings } from "../lib/config.mjs";
 import { createGitIgnoreFilter } from "../lib/git-ignore.mjs";
@@ -220,6 +220,8 @@ function renderBlocks(lines, blocks, { maxLineLength }) {
   }
   return out.join("\n");
 }
+
+const SUMMARY_HEAD_LINES = 60;
 
 // ---------- TS/JS summary ----------
 
@@ -536,8 +538,16 @@ export async function runSearch(args, { cwd: sessionCwd } = {}) {
         }
         content = parts.join("\n");
       } else if (args.summary === true) {
-        content = (await skeletonize(abs, text)) ?? (TSJS_EXT.has(ext) ? summarizeTsFile(text, maxLineLength) : undefined) ??
-          lines.slice(0, Math.min(lastDocLine, linesPerFile)).map((l, i) => truncateLine(i + 1 + ":" + l, maxLineLength)).join("\n");
+        content = (await skeletonize(abs, text)) ?? (TSJS_EXT.has(ext) ? summarizeTsFile(text, maxLineLength) : undefined);
+        if (content == null) {
+          // A parsed file with nothing to fold is its own skeleton; without a
+          // grammar there is no outline, and a summary must not cost a full read.
+          const head = canSkeletonize(abs) ? Math.min(lastDocLine, linesPerFile) : Math.min(lastDocLine, linesPerFile, SUMMARY_HEAD_LINES);
+          content = lines.slice(0, head).map((l, i) => truncateLine(i + 1 + ":" + l, maxLineLength)).join("\n");
+          if (head < lastDocLine && !canSkeletonize(abs)) {
+            content += `\n[no outline for ${ext || "this file type"}: first ${head} of ${lastDocLine} lines — read a #start-end range for more]`;
+          }
+        }
       } else {
         const capped = lines.slice(0, Math.min(lastDocLine, linesPerFile));
         content = capped.map((l, i) => truncateLine(i + 1 + ":" + l, maxLineLength)).join("\n");
@@ -707,7 +717,7 @@ export const searchSchema = {
       cwd: { type: "string" },
       summary: {
         type: "boolean",
-        description: "Return an AST skeleton (signatures, imports, structure) instead of full contents — ~60% smaller. Works for py/java/rs/php/ts/js/go/c/cpp.",
+        description: "Return an AST skeleton (imports, signatures, class structure; function bodies folded) instead of full contents — typically ~80% smaller. Works for py/java/rs/php/ts/js/go/c/cpp; other types return only the first 60 lines.",
       },
       list_importers: { type: "boolean" },
     },

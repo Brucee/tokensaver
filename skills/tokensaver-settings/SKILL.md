@@ -17,7 +17,7 @@ node "$CLAUDE_PLUGIN_ROOT/scripts/tokensaver.mjs" settings --set <key> <value>
 Run `--show` for the full list. Main keys:
 
 - `enabled` — master switch for MCP tools, hooks, redirects and savings accounting
-- `statusLine` — the two-line status line, **Claude only** (`statusLineSession`, `statusLineLifetime`, `statusLineTips` toggle its parts); saved but inert on Codex
+- `statusLine` — the two-line status line, **Claude only** (`statusLineSession`, `statusLineLifetime`, `statusLineTips` toggle its parts; `statusLineContextWarning` adds a warning once the last turn's context reaches 200K tokens — a cost heuristic, since every turn re-reads the context; compact at a natural breakpoint, not mid-task); saved but inert on Codex
 - `postCompactionDigest` — recovered-turns digest after compaction
 - `syntaxValidation` — tree-sitter/`node --check` advisory on Edit
 - `autoSessionTitle`, `spinnerVerbs`, `defaultAgent` — **Claude only**; saved but inert on Codex

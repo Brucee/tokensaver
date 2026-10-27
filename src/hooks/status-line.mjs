@@ -10,6 +10,7 @@ import { compactNumber, plainCount, durationMs, money } from "../lib/format.mjs"
 const BRAND_GREEN = "\x1b[38;2;147;232;73m";
 const DIM_GREEN = "\x1b[38;2;90;158;31m";
 const GRAY = "\x1b[38;2;140;140;140m";
+const YELLOW = "\x1b[38;2;230;190;60m";
 const RESET = "\x1b[0m";
 const DIM = "\x1b[2m";
 
@@ -24,7 +25,15 @@ const TIPS = [
   "Sql connects to live databases — query real data while you code",
 ];
 
-const WEIGHTS = { savings: 6, tip: 1, lifetime: 3 };
+// Segments take turns on the clock; registration sets refreshInterval to the
+// same period so the line keeps rotating while the session is idle.
+const ROTATE_SECONDS = 20;
+
+// Cost heuristic, not a quality threshold (no published one exists): every
+// turn re-reads the whole context from cache, so per-turn cost grows with it.
+// 200K sits below the measured median (215K, REPORT-UTILIZZO.md §5bis); the
+// advice is to compact at a natural breakpoint, not mid-implementation.
+const CONTEXT_WARN_TOKENS = 200_000;
 
 function sessionSegment(stats) {
   return (
@@ -46,15 +55,6 @@ function lifetimeSegment(lt) {
 
 function tipSegment(turnCount) {
   return `${BRAND} ${GRAY}TIP: ${TIPS[turnCount % TIPS.length]}${RESET}  `;
-}
-
-// Weighted rotation: expand each segment by its weight, index by turn count.
-function rotation(segments) {
-  const expanded = [];
-  for (const seg of segments) {
-    for (let i = 0; i < (WEIGHTS[seg] ?? 1); i++) expanded.push(seg);
-  }
-  return expanded;
 }
 
 const raw = await readStdinJson();
@@ -92,8 +92,9 @@ function previousStatusLineOutput() {
   return prevOutput;
 }
 
+let contextWarning = "";
 const done = (text) => {
-  process.stdout.write(previousStatusLineOutput() + text);
+  process.stdout.write(previousStatusLineOutput() + text + contextWarning);
   process.exit(0);
 };
 
@@ -104,18 +105,23 @@ if (sessionId == null) {
 const state = loadSessionState(sessionId);
 const stats = sessionStatsSummary(state);
 
+const contextTokens = state.parent.lastContextTokens ?? 0;
+if (settings.statusLineContextWarning && contextTokens >= CONTEXT_WARN_TOKENS) {
+  contextWarning = `${YELLOW}⚠ context ${compactNumber(contextTokens)} re-read every turn — compact at the next milestone${RESET}  `;
+}
+
 const segments = [];
 if (settings.statusLineSession) segments.push("savings");
-if (settings.statusLineTips) segments.push("tip");
 if (settings.statusLineLifetime) segments.push("lifetime");
+if (settings.statusLineTips) segments.push("tip");
 
 if (stats.totalSaverCalls > 0 && segments.length > 0) {
-  const turnCount = state.usage.turnCount;
-  const expanded = rotation(segments);
-  const picked = expanded[turnCount % expanded.length];
-  // Advance the tip once per full rotation: indexing TIPS by turnCount would
-  // pin a single tip whenever the rotation length is a multiple of TIPS.length.
-  if (picked === "tip") done(tipSegment(Math.floor(turnCount / expanded.length)));
+  // TOKENSAVER_STATUS_NOW_MS pins the clock for tests.
+  const nowMs = Number(process.env.TOKENSAVER_STATUS_NOW_MS) || Date.now();
+  const slot = Math.floor(nowMs / (ROTATE_SECONDS * 1000));
+  const picked = segments[slot % segments.length];
+  // Advance the tip once per full rotation so every tip gets its turn.
+  if (picked === "tip") done(tipSegment(Math.floor(slot / segments.length)));
   if (picked === "lifetime") {
     const lt = lifetimeStats();
     if (lt.costSavedInUsd > 0) done(lifetimeSegment(lt));

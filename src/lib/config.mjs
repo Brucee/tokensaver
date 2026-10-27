@@ -23,6 +23,7 @@ const DEFAULT_SETTINGS = {
   statusLineSession: true,
   statusLineLifetime: true,
   statusLineTips: true,
+  statusLineContextWarning: true,
   spinnerVerbs: true,
   defaultAgent: true,
   postCompactionDigest: true,

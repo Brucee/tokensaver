@@ -49,6 +49,24 @@ test("java: folds method bodies, keeps class + signatures", async () => {
   assert.match(out, /⋮ 2 lines/);
 });
 
+test("tsx: a component body folds whole even with nested blocks", async () => {
+  const src = "import React from 'react';\n\nexport default function Screen() {\n  useEffect(() => {\n    load();\n    track();\n  }, []);\n  if (x) {\n    a();\n    b();\n  }\n  return null;\n}\n";
+  const out = await skeletonize("/tmp/x.tsx", src);
+  assert.match(out, /import React/);
+  assert.match(out, /export default function Screen\(\) \{/);
+  assert.match(out, /⋮ 9 lines/);
+  assert.doesNotMatch(out, /useEffect|load\(\)/);
+});
+
+test("typescript: class methods stay visible, their nested blocks fold", async () => {
+  const src = "class S {\n  run() {\n    for (const x of xs) {\n      a(x);\n    }\n    return 1;\n  }\n  stop() {\n    b();\n    c();\n  }\n}\n";
+  const out = await skeletonize("/tmp/x.ts", src);
+  assert.match(out, /run\(\) \{/);
+  assert.match(out, /stop\(\) \{/);
+  assert.match(out, /⋮ 4 lines/);
+  assert.doesNotMatch(out, /a\(x\)/);
+});
+
 test("unknown ext / clean file → null", async () => {
   assert.equal(await skeletonize("/tmp/x.xyz", "anything"), null);
   assert.equal(await skeletonize("/tmp/x.py", "x = 1\n"), null);

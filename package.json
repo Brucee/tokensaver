@@ -1,6 +1,6 @@
 {
   "name": "tokensaver",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "tokenSaver — smart search, batch editing, SQL introspection and cost-optimized subagent delegation for Claude Code and Codex",
   "type": "module",
   "scripts": {
@@ -15,7 +15,6 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.20.0",
-    "better-sqlite3": "^12.0.0",
     "ignore": "^7.0.12",
     "mysql2": "^3.11.0",
     "pg": "^8.13.0",

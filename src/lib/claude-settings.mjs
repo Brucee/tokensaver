@@ -46,17 +46,21 @@ function isOurs(entry) {
   return cmd.includes("status-line.cjs") || cmd.includes("savings-status-line");
 }
 
+// Matches ROTATE_SECONDS in hooks/status-line.mjs: re-runs the command on a
+// timer so the segments keep rotating while the session is idle.
+const STATUS_LINE_REFRESH_SECONDS = 20;
+
 export function registerStatusLine(pluginRoot) {
   const settings = readSettings();
   if (settings == null) return;
   const command = statusLineCommand(pluginRoot);
-  if (settings.statusLine?.command === command) return;
+  if (settings.statusLine?.command === command && settings.statusLine?.refreshInterval === STATUS_LINE_REFRESH_SECONDS) return;
   // Back up a foreign statusLine so unregister can restore it instead of
   // silently destroying the user's own customization.
   if (settings.statusLine != null && !isOurs(settings.statusLine)) {
     saveSettings({ previousStatusLine: settings.statusLine });
   }
-  settings.statusLine = { type: "command", command, padding: 0 };
+  settings.statusLine = { type: "command", command, padding: 0, refreshInterval: STATUS_LINE_REFRESH_SECONDS };
   writeSettings(settings);
 }
 

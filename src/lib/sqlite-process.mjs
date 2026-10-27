@@ -8,7 +8,7 @@ process.once("exit", () => { for (const child of children) child.kill("SIGKILL")
 export async function openSqliteProcess(databasePath, timeoutMs) {
   const child = fork(new URL("./sqlite-worker.mjs", import.meta.url), [databasePath], {
     stdio: ["ignore", "ignore", "pipe", "ipc"], serialization: "advanced", windowsHide: true,
-    execArgv: [],
+    execArgv: ["--disable-warning=ExperimentalWarning"],
   });
   children.add(child);
   let closed = false;

@@ -7,7 +7,7 @@ import { join } from "node:path";
 const HOME = mkdtempSync(join(tmpdir(), "ts-save-"));
 process.env.TOKENSAVER_HOME = HOME;
 
-const { updateSessionFromTranscript, loadSessionState, equivalentCallsFor, savingsFor, pricingFor, lifetimeStats } =
+const { updateSessionFromTranscript, loadSessionState, equivalentCallsFor, savingsFor, pricingFor, lifetimeStats, scanTranscriptDelta } =
   await import("../src/lib/savings.mjs");
 
 const SID = "testsession1";
@@ -43,7 +43,7 @@ test("equivalentCallsFor weights", () => {
   assert.equal(equivalentCallsFor(SEARCH, {}), 2);
   assert.equal(equivalentCallsFor(SEARCH, { file_glob_patterns: ["a", "b", "c"], content_regex: "x", summary: true }), 2 + 2 + 1 + 1);
   assert.equal(equivalentCallsFor(SQL, {}), 5);
-  assert.equal(equivalentCallsFor(EDIT, { edits: [{ file_path: "a" }, { file_path: "b" }, { file_path: "a" }] }), 3 + 2 + 0.5);
+  assert.equal(equivalentCallsFor(EDIT, { edits: [{ file_path: "a" }, { file_path: "b" }, { file_path: "a" }] }), 3 + 2);
   assert.equal(equivalentCallsFor("Read", {}), 0);
 });
 
@@ -58,8 +58,8 @@ test("pricingFor boundary match", () => {
 test("savingsFor formula", () => {
   const s = savingsFor(5, 1000, 10000, 500, 200, "claude-sonnet-4-6");
   assert.equal(s.callsSaved, 4);
-  assert.equal(s.timeSavedInMs, 100000);
-  assert.equal(s.tokensSaved, Math.round(4 * 1000 * 1.3) + Math.round(4 * 10000 * 1.3) + Math.round(4 * 500 * 1.3) + Math.round(4 * 200));
+  assert.equal(s.timeSavedInMs, 4 * 8800);
+  assert.equal(s.tokensSaved, 4 * 1000 + 4 * 10000 + 4 * 500 + 4 * 200);
 });
 
 test("incremental transcript scan counts only successful own-tool calls", () => {
@@ -74,9 +74,20 @@ test("incremental transcript scan counts only successful own-tool calls", () => 
   assert.equal(state.totalSaverCalls, 2);           // t1 + t3 (t2 not ours)
   assert.equal(state.equivalentNativeToolCalls, 3 + 5); // Search(2+1 regex) + Sql(5)
   assert.equal(state.usage.turnCount, 2);
-  // equiv 8, calls 2 → saved (8-2)+1 = 7 → callsSaved 6
-  assert.equal(state.accumulatedSavings.callsSaved, 6);
+  assert.deepEqual(state.saverCallsByKind, { Search: 1, Sql: 1 });
+  assert.equal(state.parent.lastContextTokens, 1000 + 5000 + 500); // last turn's input + cache read + cache write
+  // equiv 8 native calls → 8/1.29 roundtrips, minus the 2 saver calls
+  assert.ok(Math.abs(state.accumulatedSavings.callsSaved - (8 / 1.29 - 2)) < 1e-9);
   assert.ok(state.accumulatedSavings.costSavedInUsd > 0);
+});
+
+test("legacy numeric pending entries still credit as kind other", () => {
+  const extra = join(HOME, "legacy.jsonl");
+  writeFileSync(extra, toolResult("legacy1") + "\n");
+  const r = scanTranscriptDelta(extra, 0, undefined, new Map([["legacy1", 4]]));
+  assert.equal(r.scan.saverCalls, 1);
+  assert.equal(r.scan.equivalentNativeToolCalls, 4);
+  assert.deepEqual(r.scan.saverCallsByKind, { other: 1 });
 });
 
 test("errored tool_result does not count", () => {
@@ -105,6 +116,7 @@ test("requestId dedup on resumed scan", () => {
 
 test("lifetimeStats aggregates sessions", () => {
   const lt = lifetimeStats();
-  assert.ok(lt.callsSaved >= 6);
+  assert.ok(lt.callsSaved > 4);
+  assert.equal(lt.timeSavedInMs, lt.callsSaved * 8800);
   assert.equal(lt.sessionCount, 1);
 });

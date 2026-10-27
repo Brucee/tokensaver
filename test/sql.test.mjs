@@ -1,6 +1,6 @@
 import { test, after, before } from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { runSql } from "../src/tools/sql.mjs";
@@ -99,6 +99,20 @@ test("Sql: queries batch with labels", async () => {
 test("Sql: lint catches unbalanced parens", async () => {
   const r = await runSql({ action: "lint", sql: "SELECT (1 + 2" });
   assert.ok(text(r).includes("unclosed"));
+});
+
+test("Sql: missing sqlite file errors and is not created", async () => {
+  const missing = join(FIX, "missing.db");
+  rmSync(missing, { force: true });
+  const r = await runSql({ action: "tables", connection_string: `sqlite:${missing}` });
+  assert.match(text(r), /not an existing SQLite file/);
+  assert.ok(!existsSync(missing));
+});
+
+test("Sql: write statement reports changes", async () => {
+  const r = await runSql({ action: "query", sql: "UPDATE users SET age = age + 1 WHERE name = 'bob'", connection_string: cs() });
+  assert.ok(text(r).includes("changes"));
+  assert.ok(text(r).includes("1"));
 });
 
 test("Sql: bad args errors", async () => {

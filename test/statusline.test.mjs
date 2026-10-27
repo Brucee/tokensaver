@@ -60,7 +60,7 @@ test("status line renders session savings segment", async () => {
   updateSessionFromTranscript(SID, TP);
   const out = runStatusLine({ session_id: SID });
   assert.match(out, /TOKENSAVER/);
-  // weighted rotation at turnCount=1 → "tip"; either way it's a valid segment
+  // clock-based rotation: any of the three segments is valid
   assert.match(out, /session savings|lifetime savings|TIP:/);
 });
 
